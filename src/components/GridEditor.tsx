@@ -1,4 +1,4 @@
-import { type MusicGrid, NOTE_TYPES, PITCH_NAMES, type NoteType } from '../types';
+import { type MusicGrid, NOTE_TYPES, NOTE_SYMBOL, PITCH_NAMES, type NoteType } from '../types';
 
 interface GridEditorProps {
   grid: MusicGrid;
@@ -53,30 +53,28 @@ export default function GridEditor({ grid, onCellChange, activeBar, activeNote }
     <div className="grid-editor">
       <div className="grid-4x4">
         {grid.map((row, ri) =>
-          row.map((cell, ci) => (
-            <button
-              key={`${ri}-${ci}`}
-              className={`grid-cell ${isActive(ri, ci) ? 'active' : ''} ${isPlaying(ri, ci) ? 'playing' : ''} note-${cell.note}`}
-              onClick={() => cycleNote(ri, ci)}
-              title={`${PITCH_NAMES[cell.pitch]} - ${cell.note} (tap to change)`}
-            >
-              <span className="cell-note">{getNoteSymbol(cell.note)}</span>
-              <span className="cell-pitch">{PITCH_NAMES[cell.pitch]}</span>
-            </button>
-          ))
+          row.map((cell, ci) => {
+            const sym = NOTE_SYMBOL[cell.note];
+            return (
+              <button
+                key={`${ri}-${ci}`}
+                className={`grid-cell ${isActive(ri, ci) ? 'active' : ''} ${isPlaying(ri, ci) ? 'playing' : ''} note-${cell.note}`}
+                onClick={() => cycleNote(ri, ci)}
+                title={`${PITCH_NAMES[cell.pitch]} - ${cell.note} (tap to change)`}
+              >
+                <span
+                  className="cell-note bravura"
+                  style={{ fontSize: sym.size, transform: `translateY(${sym.dy}px)` }}
+                >
+                  {sym.char}
+                </span>
+                <span className="cell-pitch">{PITCH_NAMES[cell.pitch]}</span>
+              </button>
+            );
+          })
         )}
       </div>
       <p className="grid-hint">Tap a cell to cycle through note types</p>
     </div>
   );
-}
-
-function getNoteSymbol(note: NoteType): string {
-  switch (note) {
-    case 'quarter': return '\u2669';
-    case 'half': return '\uD834\uDD5E';
-    case 'whole': return '\uD834\uDD5D';
-    case 'eighth': return '\u266A';
-    case 'rest': return '\u{1D13D}';
-  }
 }

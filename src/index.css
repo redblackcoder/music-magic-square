@@ -48,3 +48,8 @@ button {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
+
+.bravura {
+  font-family: 'Bravura', serif;
+  line-height: 1;
+}

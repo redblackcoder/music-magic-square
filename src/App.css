@@ -117,6 +117,11 @@
   color: var(--text-bright);
 }
 
+.cell-note.bravura {
+  font-family: 'Bravura', serif;
+  position: relative;
+}
+
 .cell-pitch {
   font-size: 10px;
   font-family: var(--mono);

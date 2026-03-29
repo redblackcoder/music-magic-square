@@ -1,4 +1,4 @@
-import { type Bar, PITCH_NAMES } from '../types';
+import { type Bar, PITCH_NAMES, NOTE_SYMBOL } from '../types';
 
 interface BarDisplayProps {
   bars: Bar[];
@@ -20,7 +20,9 @@ export default function BarDisplay({ bars, activeBar, activeNote }: BarDisplayPr
                   key={ni}
                   className={`bar-note ${bi === activeBar && ni === activeNote ? 'playing' : ''}`}
                 >
-                  {cell.note === 'rest' ? '-' : PITCH_NAMES[cell.pitch] ?? '?'}
+                  <span className="bravura" style={{ fontSize: 16 }}>{NOTE_SYMBOL[cell.note].char}</span>
+                  {' '}
+                  {cell.note === 'rest' ? '' : PITCH_NAMES[cell.pitch] ?? '?'}
                 </span>
               ))}
             </div>

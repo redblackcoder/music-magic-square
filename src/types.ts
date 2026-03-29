@@ -28,13 +28,13 @@ export const NOTE_DURATIONS: Record<NoteType, number> = {
   rest: 1,
 };
 
-/** Display labels */
-export const NOTE_LABELS: Record<NoteType, string> = {
-  quarter: '\u2669',
-  half: '\uD834\uDD5D',
-  whole: '\uD834\uDD5D',
-  eighth: '\u266A',
-  rest: '\uD834\uDD3E',
+/** Bravura (SMuFL) symbol data for each note type */
+export const NOTE_SYMBOL: Record<NoteType, { char: string; size: number; dy: number }> = {
+  quarter: { char: '\uE1D5', size: 34, dy: 8 },
+  half:    { char: '\uE1D3', size: 34, dy: 8 },
+  whole:   { char: '\uE1D2', size: 34, dy: 2 },
+  eighth:  { char: '\uE1D7', size: 34, dy: 8 },
+  rest:    { char: '\uE4E5', size: 34, dy: 6 },
 };
 
 /** All available note types for cycling */
