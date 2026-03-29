@@ -3,6 +3,7 @@ import Camera from './components/Camera';
 import GridEditor from './components/GridEditor';
 import BarDisplay from './components/BarDisplay';
 import PlaybackControls from './components/PlaybackControls';
+import QRShare from './components/QRShare';
 import { createDefaultGrid, extractBars, updateCellNote } from './gridLogic';
 import { playBars, stopPlayback } from './audioEngine';
 import type { MusicGrid, NoteType } from './types';
@@ -18,6 +19,7 @@ function App() {
   const [bpm, setBpm] = useState(120);
   const [activeBar, setActiveBar] = useState(-1);
   const [activeNote, setActiveNote] = useState(-1);
+  const [showQR, setShowQR] = useState(false);
   const cancelRef = useRef<(() => void) | null>(null);
 
   const bars = extractBars(grid);
@@ -125,10 +127,15 @@ function App() {
       <BarDisplay bars={bars} activeBar={activeBar} activeNote={activeNote} />
 
       <footer className="app-footer">
+        <button className="btn-share" onClick={() => setShowQR(true)}>
+          Share App
+        </button>
         <p>
           Rows 1-4 &rarr; Bars 1-4 | Cols 1-4 &rarr; Bars 5-8 | Diagonals &rarr; Bars 9-10
         </p>
       </footer>
+
+      <QRShare visible={showQR} onClose={() => setShowQR(false)} />
     </div>
   );
 }
