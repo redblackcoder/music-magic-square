@@ -11,7 +11,7 @@ import type { CellValue, NoteDuration } from './types';
  */
 
 /** Map a sixteenths numerator to a NoteDuration */
-const NUM_TO_DUR: Record<number, NoteDuration> = {
+export const NUM_TO_DUR: Record<number, NoteDuration> = {
   1: '1/16',
   2: '1/8',
   4: '1/4',
@@ -28,8 +28,11 @@ const VALID_PAIRS: [number, number][] = [
   [4, 8],
 ];
 
+/** Default fallback when OCR fails */
+export const DEFAULT_CELL: CellValue = { kind: 'single', dur: '1/4' };
+
 /** Parse a recognized string into a CellValue, or null if unrecognizable */
-function parseCellText(text: string): CellValue | null {
+export function parseCellText(text: string): CellValue | null {
   // Clean up OCR artifacts
   const clean = text.replace(/\s/g, '').replace(/[oO]/g, '0');
 
@@ -55,6 +58,36 @@ function parseCellText(text: string): CellValue | null {
   }
 
   return null;
+}
+
+/** Create a Tesseract worker configured for number recognition */
+export async function createOcrWorker(
+  onProgress?: (pct: number) => void,
+): Promise<Tesseract.Worker> {
+  const worker = await Tesseract.createWorker('eng', Tesseract.OEM.LSTM_ONLY, {
+    logger: (m) => {
+      if (m.status === 'recognizing text' && onProgress) {
+        onProgress(m.progress);
+      }
+    },
+  });
+  await worker.setParameters({
+    tessedit_char_whitelist: '12348+',
+    tessedit_pageseg_mode: Tesseract.PSM.SINGLE_WORD,
+  });
+  return worker;
+}
+
+/**
+ * Recognize a single image (cell or any image) using an existing Tesseract worker.
+ * Accepts anything Tesseract can handle: Canvas, ImageData, Buffer, file path, URL.
+ */
+export async function recognizeImage(
+  worker: Tesseract.Worker,
+  image: Tesseract.ImageLike,
+): Promise<CellValue | null> {
+  const { data } = await worker.recognize(image);
+  return parseCellText(data.text.trim());
 }
 
 /** Get image data from a video element */
@@ -97,7 +130,7 @@ function extractCellCanvas(
 }
 
 /** Detect the grid bounding box from the image (find the drawn grid area) */
-function detectGridBounds(imageData: ImageData): { x: number; y: number; w: number; h: number } {
+export function detectGridBounds(imageData: ImageData): { x: number; y: number; w: number; h: number } {
   const { width: w, height: h, data } = imageData;
 
   let minX = w, minY = h, maxX = 0, maxY = 0;
@@ -159,30 +192,17 @@ export async function recognizeGrid(
     }
   }
 
-  // Create a Tesseract worker with character whitelist
-  const worker = await Tesseract.createWorker('eng', Tesseract.OEM.LSTM_ONLY, {
-    logger: (m) => {
-      if (m.status === 'recognizing text' && onProgress) {
-        onProgress(m.progress);
-      }
-    },
-  });
-  await worker.setParameters({
-    tessedit_char_whitelist: '12348+',
-    tessedit_pageseg_mode: Tesseract.PSM.SINGLE_WORD,
-  });
+  const worker = await createOcrWorker(onProgress);
 
   // OCR each cell
   const result: CellValue[][] = Array.from({ length: 4 }, () => Array(4).fill(null));
-  const defaultValue: CellValue = { kind: 'single', dur: '1/4' };
 
   for (const { r, c, canvas } of cellCanvases) {
     try {
-      const { data } = await worker.recognize(canvas);
-      const parsed = parseCellText(data.text.trim());
-      result[r][c] = parsed ?? defaultValue;
+      const parsed = await recognizeImage(worker, canvas);
+      result[r][c] = parsed ?? DEFAULT_CELL;
     } catch {
-      result[r][c] = defaultValue;
+      result[r][c] = DEFAULT_CELL;
     }
   }
 
@@ -204,12 +224,22 @@ export function drawDetectionOverlay(
   const gx = (canvasW - gridSize) / 2;
   const gy = (canvasH - gridSize) / 2;
 
-  ctx.strokeStyle = 'rgba(233, 69, 96, 0.6)';
-  ctx.lineWidth = 2;
-  ctx.setLineDash([8, 4]);
+  // Semi-transparent dark overlay outside the grid area
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  ctx.fillRect(0, 0, canvasW, gy);
+  ctx.fillRect(0, gy + gridSize, canvasW, canvasH - gy - gridSize);
+  ctx.fillRect(0, gy, gx, gridSize);
+  ctx.fillRect(gx + gridSize, gy, canvasW - gx - gridSize, gridSize);
 
+  // Bright grid lines
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+  ctx.lineWidth = 2.5;
+  ctx.setLineDash([10, 5]);
+
+  // Outer border
   ctx.strokeRect(gx, gy, gridSize, gridSize);
 
+  // Inner grid lines
   const cellSize = gridSize / 4;
   for (let i = 1; i < 4; i++) {
     ctx.beginPath();
@@ -225,9 +255,9 @@ export function drawDetectionOverlay(
 
   ctx.setLineDash([]);
 
-  // Draw example numbers in each cell for guidance
-  ctx.font = `${cellSize * 0.3}px sans-serif`;
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+  // Ghost example numbers in each cell
+  ctx.font = `bold ${cellSize * 0.3}px sans-serif`;
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const examples = ['8', '4', '1', '2+1', '1', '2+1', '8', '4', '2+1', '1', '4', '8', '4', '8', '2+1', '1'];
