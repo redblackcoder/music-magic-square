@@ -31,7 +31,10 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
         streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          videoRef.current.onloadedmetadata = () => setReady(true);
+          videoRef.current.onloadedmetadata = () => {
+            videoRef.current?.play();
+            setReady(true);
+          };
         }
       } catch {
         if (!cancelled) {
