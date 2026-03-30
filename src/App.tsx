@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import Camera from './components/Camera';
 import GridEditor from './components/GridEditor';
-import BarDisplay from './components/BarDisplay';
+import StaffDisplay from './components/StaffDisplay';
 import PlaybackControls from './components/PlaybackControls';
 import QRShare from './components/QRShare';
 import { createDefaultGrid, extractBars, updateCellNote } from './gridLogic';
@@ -124,7 +124,7 @@ function App() {
         onBpmChange={setBpm}
       />
 
-      <BarDisplay bars={bars} activeBar={activeBar} activeNote={activeNote} />
+      <StaffDisplay bars={bars} activeBar={activeBar} activeNote={activeNote} />
 
       <footer className="app-footer">
         <button className="btn-share" onClick={() => setShowQR(true)}>

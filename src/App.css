@@ -213,66 +213,51 @@
   text-align: right;
 }
 
-/* ── Bar Display ── */
-.bar-display {
+/* ── Staff Display ── */
+.staff-display {
   background: var(--bg-surface);
   border-radius: 12px;
   padding: 16px;
 }
 
-.bar-display h3 {
+.staff-display h3 {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-bright);
   margin-bottom: 12px;
 }
 
-.bars-list {
+.staff-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
-.bar-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
+.staff-bar {
   border-radius: 6px;
   border-left: 3px solid transparent;
+  padding: 2px 8px;
   transition: all 0.15s;
+  overflow-x: auto;
 }
 
-.bar-item.active {
-  background: rgba(233, 69, 96, 0.1);
+.staff-bar.active {
+  background: rgba(233, 69, 96, 0.08);
   border-left-color: var(--accent);
 }
 
-.bar-label {
-  font-size: 12px;
+.staff-label {
+  font-size: 11px;
   font-family: var(--mono);
   color: var(--text-dim);
-  min-width: 56px;
+  display: block;
+  margin-bottom: -2px;
 }
 
-.bar-notes {
-  display: flex;
-  gap: 8px;
-}
-
-.bar-note {
-  font-family: var(--mono);
-  font-size: 13px;
-  color: var(--text);
-  padding: 2px 6px;
-  border-radius: 4px;
-  transition: all 0.15s;
-}
-
-.bar-note.playing {
-  background: var(--accent);
-  color: white;
-  font-weight: 700;
+.staff-svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
 }
 
 /* ── Camera ── */
