@@ -72,7 +72,7 @@
   grid-template-columns: repeat(4, 1fr);
   gap: 6px;
   width: 100%;
-  max-width: 320px;
+  max-width: 380px;
 }
 
 .grid-cell {
@@ -128,6 +128,13 @@
   flex-direction: column;
   align-items: center;
   gap: 0;
+}
+
+.cell-tied-notes {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
 }
 
 .cell-tied .cell-note {

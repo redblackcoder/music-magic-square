@@ -46,26 +46,30 @@ function CellSymbol({ value }: { value: CellValue }) {
     );
   }
 
-  // Tied notes: show both symbols with a tie arc
+  // Tied notes: show both symbols side-by-side with a tie arc below
   const sym1 = DUR_SYMBOL[value.first];
   const sym2 = DUR_SYMBOL[value.second];
+  const tiedSize = 22;
+  const tiedDy = 5;
   return (
     <span className="cell-tied">
-      <span
-        className="cell-note bravura"
-        style={{ fontSize: sym1.size * 0.7, transform: `translateY(${sym1.dy * 0.7}px)` }}
-      >
-        {sym1.char}
+      <span className="cell-tied-notes">
+        <span
+          className="cell-note bravura"
+          style={{ fontSize: tiedSize, transform: `translateY(${tiedDy}px)` }}
+        >
+          {sym1.char}
+        </span>
+        <span
+          className="cell-note bravura"
+          style={{ fontSize: tiedSize, transform: `translateY(${tiedDy}px)` }}
+        >
+          {sym2.char}
+        </span>
       </span>
-      <svg className="tie-arc" viewBox="0 0 20 8" width="16" height="6">
-        <path d="M1 6 Q10 0 19 6" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <svg className="tie-arc" viewBox="0 0 36 10" width="36" height="8">
+        <path d="M4 2 Q18 10 32 2" fill="none" stroke="currentColor" strokeWidth="1.5" />
       </svg>
-      <span
-        className="cell-note bravura"
-        style={{ fontSize: sym2.size * 0.7, transform: `translateY(${sym2.dy * 0.7}px)` }}
-      >
-        {sym2.char}
-      </span>
     </span>
   );
 }
