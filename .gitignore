@@ -36,6 +36,10 @@ model-training/checkpoint.pt
 model-training/mnist_data/
 model-training/testing/
 model-training/_preview_*.png
+model-training/_detect_*.json
+model-training/_debug_*.png
+model-training/_debug_dilated.png
+model-training/_debug_mask.png
 model-training/.venv/
 model-training/uv.lock
 eng.traineddata

@@ -160,7 +160,7 @@ def pretrain_on_mnist(model, device, epochs=3):
         os.path.join(SCRIPT_DIR, "mnist_data"),
         train=True, download=True, transform=transform,
     )
-    loader = DataLoader(mnist_train, batch_size=128, shuffle=True, num_workers=2)
+    loader = DataLoader(mnist_train, batch_size=128, shuffle=True, num_workers=0)
 
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
     criterion = nn.CrossEntropyLoss()
@@ -262,7 +262,7 @@ def export_onnx(model, device):
         input_names=["input"],
         output_names=["output"],
         dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}},
-        opset_version=12,
+        opset_version=18,
     )
     size_kb = os.path.getsize(ONNX_OUTPUT) / 1024
     print(f"\nExported to {ONNX_OUTPUT} ({size_kb:.1f} KB)")
@@ -313,8 +313,8 @@ def main():
     n_train = len(synthetic) - n_val
     train_set, val_set = torch.utils.data.random_split(synthetic, [n_train, n_val])
 
-    train_loader = DataLoader(train_set, batch_size=64, shuffle=True, num_workers=2)
-    val_loader = DataLoader(val_set, batch_size=64, num_workers=2)
+    train_loader = DataLoader(train_set, batch_size=64, shuffle=True, num_workers=0)
+    val_loader = DataLoader(val_set, batch_size=64, num_workers=0)
 
     train(model, train_loader, val_loader, device, epochs=args.epochs, label="Synthetic ")
 
@@ -326,7 +326,7 @@ def main():
 
             # Combine handwritten with some synthetic to prevent catastrophic forgetting
             combined = ConcatDataset([hw_dataset, train_set])
-            combined_loader = DataLoader(combined, batch_size=64, shuffle=True, num_workers=2)
+            combined_loader = DataLoader(combined, batch_size=64, shuffle=True, num_workers=0)
 
             train(model, combined_loader, val_loader, device,
                   epochs=min(10, args.epochs), lr=5e-4, label="Fine-tune ")
@@ -342,7 +342,7 @@ def main():
     # Final evaluation
     val_loader_plain = DataLoader(
         FolderDataset(SYNTHETIC_DIR, transform=plain),
-        batch_size=64, num_workers=2,
+        batch_size=64, num_workers=0,
     )
     final_acc = evaluate(model, val_loader_plain, device)
     print(f"Final accuracy on synthetic data: {final_acc:.1f}%")
