@@ -339,11 +339,74 @@
   object-fit: cover;
 }
 
-.camera-overlay {
+/* ── Guide Overlay (pure CSS — no canvas) ── */
+.guide-overlay {
   position: absolute;
   inset: 0;
   z-index: 2;
   pointer-events: none;
+}
+
+.guide-mask {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+/* The grid is 70vmin square, centered */
+.guide-mask-top {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: calc(50% - 35vmin);
+}
+
+.guide-mask-bottom {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: calc(50% - 35vmin);
+}
+
+.guide-mask-left {
+  top: calc(50% - 35vmin);
+  left: 0;
+  width: calc(50% - 35vmin);
+  height: 70vmin;
+}
+
+.guide-mask-right {
+  top: calc(50% - 35vmin);
+  right: 0;
+  width: calc(50% - 35vmin);
+  height: 70vmin;
+}
+
+.guide-grid {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 70vmin;
+  height: 70vmin;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  border: 2.5px dashed rgba(255, 255, 255, 0.85);
+  border-radius: 4px;
+}
+
+.guide-cell {
+  border: 1px dashed rgba(255, 255, 255, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.guide-number {
+  font-size: 4vmin;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.3);
+  user-select: none;
 }
 
 .camera-controls {
@@ -351,6 +414,7 @@
   bottom: 32px;
   left: 0;
   right: 0;
+  z-index: 5;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -394,6 +458,7 @@
 .camera-loading {
   position: absolute;
   inset: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -431,6 +496,7 @@
   top: 48px;
   left: 0;
   right: 0;
+  z-index: 5;
   text-align: center;
   color: rgba(255, 255, 255, 0.8);
   font-size: 14px;

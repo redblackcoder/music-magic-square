@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import { captureFrame, recognizeGrid, drawDetectionOverlay } from '../imageProcessing';
+import { captureFrame, recognizeGrid } from '../imageProcessing';
 import type { CellValue } from '../types';
 
 interface CameraProps {
@@ -7,9 +7,15 @@ interface CameraProps {
   onClose: () => void;
 }
 
+const GHOST_NUMBERS = [
+  ['8', '4', '1', '2+1'],
+  ['1', '2+1', '8', '4'],
+  ['2+1', '1', '4', '8'],
+  ['4', '8', '2+1', '1'],
+];
+
 export default function Camera({ onCapture, onClose }: CameraProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
@@ -51,28 +57,6 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
     };
   }, []);
 
-  // Draw overlay on canvas
-  useEffect(() => {
-    if (!ready) return;
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas) return;
-
-    let animId: number;
-    function draw() {
-      if (!video || !canvas) return;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      canvas.width = canvas.clientWidth * window.devicePixelRatio;
-      canvas.height = canvas.clientHeight * window.devicePixelRatio;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      drawDetectionOverlay(ctx, video.videoWidth, video.videoHeight, canvas.width, canvas.height);
-      animId = requestAnimationFrame(draw);
-    }
-    draw();
-    return () => cancelAnimationFrame(animId);
-  }, [ready]);
-
   const handleCapture = useCallback(async () => {
     const video = videoRef.current;
     if (!video || scanning) return;
@@ -100,7 +84,22 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
       ) : (
         <>
           <video ref={videoRef} autoPlay playsInline muted className="camera-video" />
-          <canvas ref={canvasRef} className="camera-overlay" />
+
+          {/* Pure CSS guide overlay — always visible */}
+          <div className="guide-overlay">
+            <div className="guide-mask guide-mask-top" />
+            <div className="guide-mask guide-mask-bottom" />
+            <div className="guide-mask guide-mask-left" />
+            <div className="guide-mask guide-mask-right" />
+            <div className="guide-grid">
+              {GHOST_NUMBERS.flat().map((num, i) => (
+                <div key={i} className="guide-cell">
+                  <span className="guide-number">{num}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="camera-controls">
             <button className="btn-secondary" onClick={onClose} disabled={scanning}>Cancel</button>
             <button className="btn-capture" onClick={handleCapture} disabled={!ready || scanning}>
@@ -108,6 +107,7 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
             </button>
             <div style={{ width: 64 }} />
           </div>
+
           {!ready && <div className="camera-loading">Starting camera...</div>}
           {scanning && (
             <div className="camera-loading">
@@ -119,8 +119,9 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
               </div>
             </div>
           )}
+
           <div className="camera-hint">
-            Write numbers in each cell: 1, 2, 4, 8, or tied (e.g. 1+2). Align grid within the guide.
+            Write numbers in each cell: 1, 2, 4, 8, or tied (e.g. 1+2)
           </div>
         </>
       )}
