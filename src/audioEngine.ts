@@ -1,5 +1,5 @@
 import * as Tone from 'tone';
-import { type Bar, NOTE_DURATIONS } from './types';
+import { type Bar, getCellBeats } from './types';
 
 let synth: Tone.PolySynth | null = null;
 
@@ -36,47 +36,40 @@ export async function playBars(
   Tone.getTransport().stop();
   Tone.getTransport().position = 0;
 
+  // Beat offset in quarter notes (since Tone BPM is in quarter notes per minute)
   let beatOffset = 0;
 
   for (let bi = 0; bi < bars.length; bi++) {
     const bar = bars[bi];
     const barBeatStart = beatOffset;
 
-    // Schedule bar-start callback
     Tone.getTransport().schedule(() => {
       onBarStart?.(bi);
     }, `0:0:${barBeatStart}`);
 
     for (let ni = 0; ni < bar.cells.length; ni++) {
       const cell = bar.cells[ni];
-      const dur = NOTE_DURATIONS[cell.note];
+      // getCellBeats returns fraction of a whole note; multiply by 4 for quarter-note beats
+      const durationInQuarters = getCellBeats(cell.value) * 4;
       const time = `0:0:${beatOffset}`;
+      const note = midiToNote(cell.pitch);
+      const noteDur = `0:0:${durationInQuarters}`;
+      const capturedBi = bi;
+      const capturedNi = ni;
 
-      if (cell.note !== 'rest') {
-        const note = midiToNote(cell.pitch);
-        const noteDur = `0:0:${dur}`;
-        const capturedBi = bi;
-        const capturedNi = ni;
-        Tone.getTransport().schedule((t) => {
-          onNoteStart?.(capturedBi, capturedNi);
-          s.triggerAttackRelease(note, noteDur, t);
-        }, time);
-      } else {
-        const capturedBi = bi;
-        const capturedNi = ni;
-        Tone.getTransport().schedule(() => {
-          onNoteStart?.(capturedBi, capturedNi);
-        }, time);
-      }
+      Tone.getTransport().schedule((t) => {
+        onNoteStart?.(capturedBi, capturedNi);
+        s.triggerAttackRelease(note, noteDur, t);
+      }, time);
 
-      beatOffset += dur;
+      beatOffset += durationInQuarters;
     }
   }
 
   // Schedule stop
   Tone.getTransport().schedule(() => {
     Tone.getTransport().stop();
-    onBarStart?.(-1); // signal done
+    onBarStart?.(-1);
   }, `0:0:${beatOffset}`);
 
   Tone.getTransport().start();

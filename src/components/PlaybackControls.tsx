@@ -14,23 +14,25 @@ export default function PlaybackControls({
   onBpmChange,
 }: PlaybackControlsProps) {
   return (
-    <div className="playback-controls">
+    <div className="playback-row">
       <button
         className={`btn-play ${isPlaying ? 'playing' : ''}`}
         onClick={isPlaying ? onStop : onPlay}
       >
-        {isPlaying ? '\u25A0 Stop' : '\u25B6 Play'}
+        {isPlaying ? '\u25A0' : '\u25B6'}
       </button>
-      <div className="bpm-control">
-        <label>BPM</label>
+
+      <div className="bpm-vertical">
+        <span className="bpm-value">{bpm}</span>
         <input
           type="range"
-          min={60}
+          min={40}
           max={240}
           value={bpm}
           onChange={(e) => onBpmChange(Number(e.target.value))}
+          className="bpm-slider-v"
         />
-        <span className="bpm-value">{bpm}</span>
+        <span className="bpm-label">BPM</span>
       </div>
     </div>
   );

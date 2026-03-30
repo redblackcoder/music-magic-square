@@ -1,9 +1,9 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { captureFrame, recognizeGrid, drawDetectionOverlay } from '../imageProcessing';
-import type { NoteType } from '../types';
+import type { NoteDuration } from '../types';
 
 interface CameraProps {
-  onCapture: (notes: NoteType[][]) => void;
+  onCapture: (notes: NoteDuration[][]) => void;
   onClose: () => void;
 }
 

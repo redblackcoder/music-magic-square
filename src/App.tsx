@@ -1,13 +1,13 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import Camera from './components/Camera';
 import GridEditor from './components/GridEditor';
 import StaffDisplay from './components/StaffDisplay';
 import PlaybackControls from './components/PlaybackControls';
 import QRShare from './components/QRShare';
-import { createDefaultGrid, extractBars, updateCellNote } from './gridLogic';
+import { createDefaultGrid, extractBars, updateCellValue, validateMagicSquare } from './gridLogic';
 import { playBars, stopPlayback } from './audioEngine';
-import type { MusicGrid, NoteType } from './types';
-import { DEFAULT_PITCHES } from './types';
+import type { MusicGrid, CellValue, NoteDuration } from './types';
+import { DEFAULT_PITCHES, DEFAULT_VALUES } from './types';
 import './App.css';
 
 type View = 'main' | 'camera';
@@ -23,18 +23,19 @@ function App() {
   const cancelRef = useRef<(() => void) | null>(null);
 
   const bars = extractBars(grid);
+  const validation = useMemo(() => validateMagicSquare(grid), [grid]);
 
-  const handleCellChange = useCallback((row: number, col: number, note: NoteType) => {
-    setGrid((g) => updateCellNote(g, row, col, note));
+  const handleCellChange = useCallback((row: number, col: number, value: CellValue) => {
+    setGrid((g) => updateCellValue(g, row, col, value));
   }, []);
 
-  const handleCapture = useCallback((notes: NoteType[][]) => {
+  const handleCapture = useCallback((notes: NoteDuration[][]) => {
     setGrid(() =>
       notes.map((row, ri) =>
-        row.map((note, ci) => ({
+        row.map((dur, ci) => ({
           row: ri,
           col: ci,
-          note,
+          value: { kind: 'single' as const, dur },
           pitch: DEFAULT_PITCHES[ri][ci],
         }))
       )
@@ -43,6 +44,7 @@ function App() {
   }, []);
 
   const handlePlay = useCallback(async () => {
+    if (!validation.valid) return;
     setIsPlaying(true);
     setActiveBar(0);
     setActiveNote(-1);
@@ -65,7 +67,7 @@ function App() {
       },
     );
     cancelRef.current = cancel;
-  }, [bars, bpm]);
+  }, [bars, bpm, validation.valid]);
 
   const handleStop = useCallback(() => {
     cancelRef.current?.();
@@ -76,13 +78,16 @@ function App() {
   }, []);
 
   const handleRandomize = useCallback(() => {
-    const noteTypes: NoteType[] = ['quarter', 'half', 'whole', 'eighth', 'rest'];
+    // Use the default magic square values shuffled to keep validity
+    // Simple approach: randomly permute rows and columns of DEFAULT_VALUES
+    const rowPerm = [0, 1, 2, 3].sort(() => Math.random() - 0.5);
+    const colPerm = [0, 1, 2, 3].sort(() => Math.random() - 0.5);
     setGrid(
       Array.from({ length: 4 }, (_, ri) =>
         Array.from({ length: 4 }, (_, ci) => ({
           row: ri,
           col: ci,
-          note: noteTypes[Math.floor(Math.random() * noteTypes.length)],
+          value: DEFAULT_VALUES[rowPerm[ri]][colPerm[ci]],
           pitch: DEFAULT_PITCHES[ri][ci],
         }))
       )
@@ -97,7 +102,7 @@ function App() {
     <div className="app">
       <header className="app-header">
         <h1>Music Magic Square</h1>
-        <p className="subtitle">Draw a 4x4 grid of notes, hear 10 bars of music</p>
+        <p className="subtitle">Each row, column &amp; diagonal = 1 bar in 4/4 time</p>
       </header>
 
       <div className="actions">
@@ -116,23 +121,36 @@ function App() {
         activeNote={activeNote}
       />
 
-      <PlaybackControls
-        isPlaying={isPlaying}
-        bpm={bpm}
-        onPlay={handlePlay}
-        onStop={handleStop}
-        onBpmChange={setBpm}
-      />
+      {/* Validation badge */}
+      <div className={`validation ${validation.valid ? 'valid' : 'invalid'}`}>
+        {validation.valid ? (
+          <span>Valid magic square</span>
+        ) : (
+          <details>
+            <summary>Invalid — {validation.errors.length} line(s) don't sum to 1 bar</summary>
+            <ul>
+              {validation.errors.map((e, i) => <li key={i}>{e}</li>)}
+            </ul>
+          </details>
+        )}
+      </div>
 
-      <StaffDisplay bars={bars} activeBar={activeBar} activeNote={activeNote} />
+      {/* Staff + BPM layout */}
+      <div className="staff-bpm-row">
+        <StaffDisplay bars={bars} activeBar={activeBar} activeNote={activeNote} />
+        <PlaybackControls
+          isPlaying={isPlaying}
+          bpm={bpm}
+          onPlay={handlePlay}
+          onStop={handleStop}
+          onBpmChange={setBpm}
+        />
+      </div>
 
       <footer className="app-footer">
         <button className="btn-share" onClick={() => setShowQR(true)}>
           Share App
         </button>
-        <p>
-          Rows 1-4 &rarr; Bars 1-4 | Cols 1-4 &rarr; Bars 5-8 | Diagonals &rarr; Bars 9-10
-        </p>
       </footer>
 
       <QRShare visible={showQR} onClose={() => setShowQR(false)} />

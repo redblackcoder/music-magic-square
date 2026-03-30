@@ -1,4 +1,4 @@
-import { type NoteType } from './types';
+import { type NoteDuration } from './types';
 
 /**
  * Lightweight image-based note recognition.
@@ -97,7 +97,7 @@ function detectGridBounds(binary: Uint8Array, w: number, h: number): Rect {
 }
 
 /** Classify a cell region based on ink density and distribution */
-function classifyCell(binary: Uint8Array, w: number, cellRect: Rect): NoteType {
+function classifyCell(binary: Uint8Array, w: number, cellRect: Rect): NoteDuration {
   let totalPixels = 0;
   let darkPixels = 0;
   let darkInCenter = 0;
@@ -123,25 +123,25 @@ function classifyCell(binary: Uint8Array, w: number, cellRect: Rect): NoteType {
     }
   }
 
-  if (totalPixels === 0) return 'rest';
+  if (totalPixels === 0) return '1/4';
 
   const density = darkPixels / totalPixels;
   const centerDensity = centerPixels > 0 ? darkInCenter / centerPixels : 0;
 
-  // Classification heuristics:
-  // - Very low density: rest (empty cell)
-  // - High center density + moderate overall: quarter note (filled note head)
-  // - Moderate density with hollow center: half note
-  // - Low-moderate density: whole note or eighth note
-  if (density < 0.05) return 'rest';
-  if (density > 0.25 && centerDensity > 0.4) return 'quarter';
-  if (density > 0.15 && centerDensity < 0.3) return 'half';
-  if (density > 0.2) return 'eighth';
-  return 'whole';
+  // Classification heuristics based on ink density:
+  // - Very low density → sixteenth (small symbol)
+  // - High density + filled center → quarter
+  // - Moderate density hollow center → half
+  // - Otherwise → eighth
+  if (density < 0.05) return '1/16';
+  if (density > 0.25 && centerDensity > 0.4) return '1/4';
+  if (density > 0.15 && centerDensity < 0.3) return '1/2';
+  if (density > 0.2) return '1/8';
+  return '1/4';
 }
 
 /** Process a captured frame and return a 4x4 grid of recognized notes */
-export function recognizeGrid(imageData: ImageData): NoteType[][] {
+export function recognizeGrid(imageData: ImageData): NoteDuration[][] {
   const { width: w, height: h } = imageData;
   const gray = toGrayscale(imageData);
   const binary = adaptiveThreshold(gray, w, h);
@@ -150,10 +150,10 @@ export function recognizeGrid(imageData: ImageData): NoteType[][] {
   const cellW = bounds.w / 4;
   const cellH = bounds.h / 4;
 
-  const result: NoteType[][] = [];
+  const result: NoteDuration[][] = [];
 
   for (let r = 0; r < 4; r++) {
-    const row: NoteType[] = [];
+    const row: NoteDuration[] = [];
     for (let c = 0; c < 4; c++) {
       const cellRect: Rect = {
         x: bounds.x + c * cellW + cellW * 0.1,
