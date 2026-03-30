@@ -1,73 +1,72 @@
-# React + TypeScript + Vite
+# Music Magic Square
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A mobile-first PWA where you draw a 4x4 grid of numbers, scan it with your camera, and hear it played as music. Each row, column, and diagonal must sum to one bar in 4/4 time — a musical magic square.
 
-Currently, two official plugins are available:
+## How It Works
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Each cell holds a number representing note duration in sixteenths:
 
-## React Compiler
+| Number | Note     | Duration |
+|--------|----------|----------|
+| 1      | 1/16th   | 1 beat   |
+| 2      | 1/8th    | 2 beats  |
+| 4      | Quarter  | 4 beats  |
+| 8      | Half     | 8 beats  |
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Tied notes (e.g., `2+4`, `4+8`) combine two durations. Every row, column, and diagonal must sum to 16 (one bar).
 
-## Expanding the ESLint configuration
+## Quick Start
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev        # Start dev server
+npm run build      # Production build
+npm test           # Run OCR tests
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Project Structure
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
 ```
+src/                    # React app source
+  components/           # UI components (GridEditor, Camera, Staff, etc.)
+  types.ts              # Core data model (CellValue, NoteDuration, etc.)
+  imageProcessing.ts    # Grid detection + OCR recognition
+  digitRecognizer.ts    # ONNX model inference (browser + Node)
+  audioEngine.ts        # Tone.js playback
+  gridLogic.ts          # Magic square validation
+
+model-training/         # ML model training pipeline (see its README)
+tests/                  # OCR test suite (see its README)
+public/                 # Static assets (fonts, ONNX models)
+scripts/                # Utility scripts
+```
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start Vite dev server |
+| `npm run build` | TypeScript check + production build |
+| `npm run preview` | Preview production build |
+| `npm test` | Run OCR recognition tests |
+| `npm run lint` | ESLint check |
+
+## Model Training
+
+See [model-training/README.md](model-training/README.md) for the full ML pipeline: synthetic data generation, PyTorch training with MNIST transfer learning, and ONNX export.
+
+## Scanning
+
+The app uses ONNX Runtime to recognize hand-drawn digits and sums:
+- **cell-recognizer.onnx** (65 classes) — digits 0-9 + all N+M sums
+- **mnist-12.onnx** (10 classes) — fallback, single digits only
+
+The camera view shows a 4x4 guide grid overlay. Write numbers in each cell, align with the guide, and tap capture.
+
+## Tech Stack
+
+- Vite 8 + React 19 + TypeScript
+- Tone.js (audio synthesis)
+- ONNX Runtime Web (digit recognition)
+- Bravura font (SMuFL music notation)
+- Deployed on Vercel

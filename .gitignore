@@ -34,4 +34,8 @@ model-training/handwritten/
 model-training/preview.png
 model-training/checkpoint.pt
 model-training/mnist_data/
+model-training/testing/
+model-training/_preview_*.png
+model-training/.venv/
+model-training/uv.lock
 eng.traineddata
