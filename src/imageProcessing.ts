@@ -1,13 +1,13 @@
-import Tesseract from 'tesseract.js';
+import { createDigitRecognizer, prepareDigitInput, type DigitRecognizer } from './digitRecognizer';
 import type { CellValue, NoteDuration } from './types';
 
 /**
- * OCR-based number recognition for hand-drawn 4x4 grids.
+ * ONNX-based digit recognition for hand-drawn 4x4 grids.
  *
  * Each cell contains a number (1, 2, 4, 8) or a tied pair (e.g. "1+2").
  * Numbers represent sixteenths: 1→1/16, 2→1/8, 4→1/4, 8→1/2.
  *
- * Uses Tesseract.js with character whitelist "12348+" for maximum accuracy.
+ * Uses the official MNIST ONNX model (26 KB) for digit classification.
  */
 
 /** Map a sixteenths numerator to a NoteDuration */
@@ -28,15 +28,13 @@ const VALID_PAIRS: [number, number][] = [
   [4, 8],
 ];
 
-/** Default fallback when OCR fails */
+/** Default fallback when recognition fails */
 export const DEFAULT_CELL: CellValue = { kind: 'single', dur: '1/4' };
 
 /** Parse a recognized string into a CellValue, or null if unrecognizable */
 export function parseCellText(text: string): CellValue | null {
-  // Clean up OCR artifacts
   const clean = text.replace(/\s/g, '').replace(/[oO]/g, '0');
 
-  // Try single number
   const singleMatch = clean.match(/^(\d+)$/);
   if (singleMatch) {
     const n = parseInt(singleMatch[1], 10);
@@ -45,12 +43,10 @@ export function parseCellText(text: string): CellValue | null {
     }
   }
 
-  // Try tied pair: "N+M" in any order
   const pairMatch = clean.match(/^(\d+)\+(\d+)$/);
   if (pairMatch) {
     let a = parseInt(pairMatch[1], 10);
     let b = parseInt(pairMatch[2], 10);
-    // Normalize order: smaller first
     if (a > b) [a, b] = [b, a];
     if (VALID_PAIRS.some(([x, y]) => x === a && y === b) && NUM_TO_DUR[a] && NUM_TO_DUR[b]) {
       return { kind: 'tied', first: NUM_TO_DUR[a], second: NUM_TO_DUR[b] };
@@ -60,34 +56,12 @@ export function parseCellText(text: string): CellValue | null {
   return null;
 }
 
-/** Create a Tesseract worker configured for number recognition */
-export async function createOcrWorker(
-  onProgress?: (pct: number) => void,
-): Promise<Tesseract.Worker> {
-  const worker = await Tesseract.createWorker('eng', Tesseract.OEM.LSTM_ONLY, {
-    logger: (m) => {
-      if (m.status === 'recognizing text' && onProgress) {
-        onProgress(m.progress);
-      }
-    },
-  });
-  await worker.setParameters({
-    tessedit_char_whitelist: '12348+',
-    tessedit_pageseg_mode: Tesseract.PSM.SINGLE_WORD,
-  });
-  return worker;
-}
-
-/**
- * Recognize a single image (cell or any image) using an existing Tesseract worker.
- * Accepts anything Tesseract can handle: Canvas, ImageData, Buffer, file path, URL.
- */
-export async function recognizeImage(
-  worker: Tesseract.Worker,
-  image: Tesseract.ImageLike,
-): Promise<CellValue | null> {
-  const { data } = await worker.recognize(image);
-  return parseCellText(data.text.trim());
+/** Convert a digit (0-9) from MNIST to a CellValue, or null if not a valid note digit */
+export function digitToCellValue(digit: number): CellValue | null {
+  if (VALID_SINGLES.has(digit) && NUM_TO_DUR[digit]) {
+    return { kind: 'single', dur: NUM_TO_DUR[digit] };
+  }
+  return null;
 }
 
 /** Get image data from a video element */
@@ -100,36 +74,7 @@ export function captureFrame(video: HTMLVideoElement): ImageData {
   return ctx.getImageData(0, 0, canvas.width, canvas.height);
 }
 
-/** Extract a sub-region of an ImageData as a new canvas for Tesseract */
-function extractCellCanvas(
-  imageData: ImageData,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-): HTMLCanvasElement {
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d')!;
-
-  // Create a temporary canvas with the full image
-  const tmp = document.createElement('canvas');
-  tmp.width = imageData.width;
-  tmp.height = imageData.height;
-  const tmpCtx = tmp.getContext('2d')!;
-  tmpCtx.putImageData(imageData, 0, 0);
-
-  // Draw the cropped region with padding
-  const pad = Math.round(Math.min(w, h) * 0.05);
-  ctx.fillStyle = 'white';
-  ctx.fillRect(0, 0, w, h);
-  ctx.drawImage(tmp, x + pad, y + pad, w - 2 * pad, h - 2 * pad, 0, 0, w, h);
-
-  return canvas;
-}
-
-/** Detect the grid bounding box from the image (find the drawn grid area) */
+/** Detect the grid bounding box from the image */
 export function detectGridBounds(imageData: ImageData): { x: number; y: number; w: number; h: number } {
   const { width: w, height: h, data } = imageData;
 
@@ -165,48 +110,80 @@ export function detectGridBounds(imageData: ImageData): { x: number; y: number; 
 }
 
 /**
- * Recognize a 4x4 grid of hand-drawn numbers using Tesseract OCR.
- * Returns a 4x4 array of CellValues.
- * Falls back to quarter note for any unrecognizable cell.
+ * Recognize a single cell image using the MNIST model.
+ * The image should contain a single hand-drawn digit.
+ */
+export async function recognizeCellFromImageData(
+  recognizer: DigitRecognizer,
+  imageData: ImageData,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): Promise<CellValue> {
+  // 10% inset to avoid grid lines
+  const inset = 0.1;
+  const cx = Math.floor(x + w * inset);
+  const cy = Math.floor(y + h * inset);
+  const cw = Math.floor(w * (1 - 2 * inset));
+  const ch = Math.floor(h * (1 - 2 * inset));
+
+  const pixels = prepareDigitInput(
+    (px, py) => {
+      const sx = cx + px;
+      const sy = cy + py;
+      if (sx < 0 || sx >= imageData.width || sy < 0 || sy >= imageData.height) return 255;
+      const i = (sy * imageData.width + sx) * 4;
+      return 0.299 * imageData.data[i] + 0.587 * imageData.data[i + 1] + 0.114 * imageData.data[i + 2];
+    },
+    cw,
+    ch,
+  );
+
+  const { digit, confidence } = await recognizer.recognize(pixels);
+
+  if (confidence < 0.5) return DEFAULT_CELL;
+
+  return digitToCellValue(digit) ?? DEFAULT_CELL;
+}
+
+/**
+ * Recognize a 4x4 grid of hand-drawn numbers using ONNX MNIST model.
  */
 export async function recognizeGrid(
   imageData: ImageData,
   onProgress?: (pct: number) => void,
 ): Promise<CellValue[][]> {
   const bounds = detectGridBounds(imageData);
-  const cellW = Math.floor(bounds.w / 4);
-  const cellH = Math.floor(bounds.h / 4);
+  const cellW = bounds.w / 4;
+  const cellH = bounds.h / 4;
 
-  // Extract all 16 cell images
-  const cellCanvases: { r: number; c: number; canvas: HTMLCanvasElement }[] = [];
-  for (let r = 0; r < 4; r++) {
-    for (let c = 0; c < 4; c++) {
-      const canvas = extractCellCanvas(
-        imageData,
-        Math.floor(bounds.x + c * cellW),
-        Math.floor(bounds.y + r * cellH),
-        cellW,
-        cellH,
-      );
-      cellCanvases.push({ r, c, canvas });
+  // In browser, model is served from public/
+  const modelPath = new URL('/mnist-12.onnx', window.location.origin).href;
+  const recognizer = await createDigitRecognizer(modelPath);
+
+  const result: CellValue[][] = [];
+
+  try {
+    for (let r = 0; r < 4; r++) {
+      const row: CellValue[] = [];
+      for (let c = 0; c < 4; c++) {
+        const cell = await recognizeCellFromImageData(
+          recognizer,
+          imageData,
+          bounds.x + c * cellW,
+          bounds.y + r * cellH,
+          cellW,
+          cellH,
+        );
+        row.push(cell);
+        onProgress?.((r * 4 + c + 1) / 16);
+      }
+      result.push(row);
     }
+  } finally {
+    await recognizer.dispose();
   }
-
-  const worker = await createOcrWorker(onProgress);
-
-  // OCR each cell
-  const result: CellValue[][] = Array.from({ length: 4 }, () => Array(4).fill(null));
-
-  for (const { r, c, canvas } of cellCanvases) {
-    try {
-      const parsed = await recognizeImage(worker, canvas);
-      result[r][c] = parsed ?? DEFAULT_CELL;
-    } catch {
-      result[r][c] = DEFAULT_CELL;
-    }
-  }
-
-  await worker.terminate();
 
   return result;
 }
@@ -224,22 +201,17 @@ export function drawDetectionOverlay(
   const gx = (canvasW - gridSize) / 2;
   const gy = (canvasH - gridSize) / 2;
 
-  // Semi-transparent dark overlay outside the grid area
   ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
   ctx.fillRect(0, 0, canvasW, gy);
   ctx.fillRect(0, gy + gridSize, canvasW, canvasH - gy - gridSize);
   ctx.fillRect(0, gy, gx, gridSize);
   ctx.fillRect(gx + gridSize, gy, canvasW - gx - gridSize, gridSize);
 
-  // Bright grid lines
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
   ctx.lineWidth = 2.5;
   ctx.setLineDash([10, 5]);
-
-  // Outer border
   ctx.strokeRect(gx, gy, gridSize, gridSize);
 
-  // Inner grid lines
   const cellSize = gridSize / 4;
   for (let i = 1; i < 4; i++) {
     ctx.beginPath();
@@ -255,7 +227,6 @@ export function drawDetectionOverlay(
 
   ctx.setLineDash([]);
 
-  // Ghost example numbers in each cell
   ctx.font = `bold ${cellSize * 0.3}px sans-serif`;
   ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
   ctx.textAlign = 'center';

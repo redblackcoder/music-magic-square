@@ -1,12 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { readdirSync, existsSync } from 'fs';
+import { existsSync } from 'fs';
 import path from 'path';
-import Tesseract from 'tesseract.js';
 import { createCanvas, loadImage } from 'canvas';
+import { createDigitRecognizer, type DigitRecognizer } from '../src/digitRecognizer';
 import {
   parseCellText,
-  createOcrWorker,
-  recognizeImage,
+  recognizeCellFromImageData,
   detectGridBounds,
   DEFAULT_CELL,
 } from '../src/imageProcessing';
@@ -14,23 +13,16 @@ import type { CellValue } from '../src/types';
 
 const CELL_FIXTURES = path.resolve(__dirname, 'fixtures/cells');
 const GRID_FIXTURES = path.resolve(__dirname, 'fixtures/grids');
+const MODEL_PATH = path.resolve(__dirname, '../public/mnist-12.onnx');
 
-// ─── Helper: load an image file into something Tesseract can consume ───
+// ─── Helper: load image file into ImageData ───
 
-async function loadImageBuffer(filePath: string): Promise<Buffer> {
+async function loadImageData(filePath: string): Promise<ImageData> {
   const img = await loadImage(filePath);
   const canvas = createCanvas(img.width, img.height);
   const ctx = canvas.getContext('2d');
   ctx.drawImage(img, 0, 0);
-  return canvas.toBuffer('image/png');
-}
-
-async function loadImageData(filePath: string) {
-  const img = await loadImage(filePath);
-  const canvas = createCanvas(img.width, img.height);
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0);
-  return ctx.getImageData(0, 0, img.width, img.height);
+  return ctx.getImageData(0, 0, img.width, img.height) as unknown as ImageData;
 }
 
 // ─── parseCellText unit tests (no images needed) ───
@@ -63,49 +55,57 @@ describe('parseCellText', () => {
     expect(parseCellText('')).toBeNull();
     expect(parseCellText('3')).toBeNull();
     expect(parseCellText('16')).toBeNull();
-    expect(parseCellText('1+1')).toBeNull(); // not a valid pair
+    expect(parseCellText('1+1')).toBeNull();
     expect(parseCellText('abc')).toBeNull();
   });
 });
 
-// ─── Single cell OCR tests (data-driven, user supplies images) ───
+// ─── Single cell OCR tests (uses same recognizeCellFromImageData as app) ───
 
 /**
- * Add test cases here. Each entry maps an image filename to its expected value.
+ * Each entry: image filename → expected CellValue.
+ * Images go in tests/fixtures/cells/ (png or jpg).
  *
- * Image files go in: tests/fixtures/cells/
- * Supported formats: .png, .jpg, .jpeg
- *
- * The filename is just for identification — the expected value is what matters.
- *
- * Example:
- *   { file: 'eight.png', expected: { kind: 'single', dur: '1/2' } },
- *   { file: 'one_plus_two.jpg', expected: { kind: 'tied', first: '1/16', second: '1/8' } },
+ * Tests use recognizeCellFromImageData — the exact same function
+ * the app calls for each grid cell during scanning.
  */
 const CELL_CASES: { file: string; expected: CellValue }[] = [
-  // ← Add your test cases here
+  // Digit 1 → 1/16th note
+  { file: 'mnist_1_1.png', expected: { kind: 'single', dur: '1/16' } },
+  { file: 'mnist_1_2.png', expected: { kind: 'single', dur: '1/16' } },
+  { file: 'mnist_1_3.png', expected: { kind: 'single', dur: '1/16' } },
+  { file: 'mnist_1_4.png', expected: { kind: 'single', dur: '1/16' } },
+  { file: 'mnist_1_5.png', expected: { kind: 'single', dur: '1/16' } },
+  // Digit 2 → 1/8th note
+  { file: 'mnist_2_1.png', expected: { kind: 'single', dur: '1/8' } },
+  { file: 'mnist_2_2.png', expected: { kind: 'single', dur: '1/8' } },
+  { file: 'mnist_2_3.png', expected: { kind: 'single', dur: '1/8' } },
+  { file: 'mnist_2_4.png', expected: { kind: 'single', dur: '1/8' } },
+  { file: 'mnist_2_5.png', expected: { kind: 'single', dur: '1/8' } },
+  // Digit 4 → 1/4 quarter note
+  { file: 'mnist_4_1.png', expected: { kind: 'single', dur: '1/4' } },
+  { file: 'mnist_4_2.png', expected: { kind: 'single', dur: '1/4' } },
+  { file: 'mnist_4_3.png', expected: { kind: 'single', dur: '1/4' } },
+  { file: 'mnist_4_4.png', expected: { kind: 'single', dur: '1/4' } },
+  { file: 'mnist_4_5.png', expected: { kind: 'single', dur: '1/4' } },
+  // Digit 8 → 1/2 half note
+  { file: 'mnist_8_1.png', expected: { kind: 'single', dur: '1/2' } },
+  { file: 'mnist_8_2.png', expected: { kind: 'single', dur: '1/2' } },
+  { file: 'mnist_8_3.png', expected: { kind: 'single', dur: '1/2' } },
+  { file: 'mnist_8_4.png', expected: { kind: 'single', dur: '1/2' } },
+  { file: 'mnist_8_5.png', expected: { kind: 'single', dur: '1/2' } },
 ];
 
 describe('single cell OCR', () => {
-  let worker: Tesseract.Worker;
-
-  // Filter to only cases whose files actually exist
-  const activeCases = CELL_CASES.filter(({ file }) =>
-    existsSync(path.join(CELL_FIXTURES, file)),
-  );
+  let recognizer: DigitRecognizer;
 
   beforeAll(async () => {
-    if (activeCases.length === 0) return;
-    worker = await createOcrWorker();
+    recognizer = await createDigitRecognizer(MODEL_PATH);
   });
 
   afterAll(async () => {
-    if (worker) await worker.terminate();
+    if (recognizer) await recognizer.dispose();
   });
-
-  if (CELL_CASES.length === 0) {
-    it.skip('no cell test cases defined yet — add entries to CELL_CASES', () => {});
-  }
 
   for (const { file, expected } of CELL_CASES) {
     const filePath = path.join(CELL_FIXTURES, file);
@@ -116,42 +116,34 @@ describe('single cell OCR', () => {
     }
 
     it(`recognizes "${file}"`, async () => {
-      const buffer = await loadImageBuffer(filePath);
-      const result = await recognizeImage(worker, buffer);
-      expect(result ?? DEFAULT_CELL).toEqual(expected);
+      // Load image as ImageData (same format the app uses)
+      const imageData = await loadImageData(filePath);
+      // Call the same function the app calls for each cell
+      const result = await recognizeCellFromImageData(
+        recognizer,
+        imageData,
+        0, 0,
+        imageData.width, imageData.height,
+      );
+      expect(result).toEqual(expected);
     });
   }
 });
 
-// ─── Full grid OCR tests (data-driven, user supplies images) ───
+// ─── Full grid OCR tests ───
 
 /**
- * Add test cases here. Each entry maps a grid image to the expected 4x4 result.
+ * Each entry: grid image filename → expected 4x4 CellValue[][].
+ * Images go in tests/fixtures/grids/ (png or jpg).
  *
- * Image files go in: tests/fixtures/grids/
- * Supported formats: .png, .jpg, .jpeg
- *
- * Example:
- *   {
- *     file: 'grid1.png',
- *     expected: [
- *       [{ kind: 'single', dur: '1/2' }, { kind: 'single', dur: '1/4' }, { kind: 'single', dur: '1/16' }, { kind: 'tied', first: '1/8', second: '1/16' }],
- *       [{ kind: 'single', dur: '1/16' }, { kind: 'tied', first: '1/8', second: '1/16' }, { kind: 'single', dur: '1/2' }, { kind: 'single', dur: '1/4' }],
- *       [{ kind: 'tied', first: '1/8', second: '1/16' }, { kind: 'single', dur: '1/16' }, { kind: 'single', dur: '1/4' }, { kind: 'single', dur: '1/2' }],
- *       [{ kind: 'single', dur: '1/4' }, { kind: 'single', dur: '1/2' }, { kind: 'tied', first: '1/8', second: '1/16' }, { kind: 'single', dur: '1/16' }],
- *     ],
- *   },
+ * Tests use detectGridBounds + recognizeCellFromImageData — the same
+ * pipeline the app runs when processing a captured camera frame.
  */
 const GRID_CASES: { file: string; expected: CellValue[][] }[] = [
   // ← Add your test cases here
 ];
 
 describe('full grid OCR', () => {
-  // Filter to only cases whose files actually exist
-  const activeCases = GRID_CASES.filter(({ file }) =>
-    existsSync(path.join(GRID_FIXTURES, file)),
-  );
-
   if (GRID_CASES.length === 0) {
     it.skip('no grid test cases defined yet — add entries to GRID_CASES', () => {});
   }
@@ -166,38 +158,32 @@ describe('full grid OCR', () => {
 
     it(`recognizes grid "${file}"`, async () => {
       const imageData = await loadImageData(filePath);
-      const bounds = detectGridBounds(imageData as unknown as ImageData);
-      const cellW = Math.floor(bounds.w / 4);
-      const cellH = Math.floor(bounds.h / 4);
+      const bounds = detectGridBounds(imageData);
+      const cellW = bounds.w / 4;
+      const cellH = bounds.h / 4;
 
-      const worker = await createOcrWorker();
+      const recognizer = await createDigitRecognizer(MODEL_PATH);
       const result: CellValue[][] = [];
 
       try {
         for (let r = 0; r < 4; r++) {
           const row: CellValue[] = [];
           for (let c = 0; c < 4; c++) {
-            // Crop each cell with 10% inset to avoid grid lines
-            const cx = Math.floor(bounds.x + c * cellW + cellW * 0.1);
-            const cy = Math.floor(bounds.y + r * cellH + cellH * 0.1);
-            const cw = Math.floor(cellW * 0.8);
-            const ch = Math.floor(cellH * 0.8);
-
-            const img = await loadImage(filePath);
-            const canvas = createCanvas(cw, ch);
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, cw, ch);
-            ctx.drawImage(img, cx, cy, cw, ch, 0, 0, cw, ch);
-
-            const buffer = canvas.toBuffer('image/png');
-            const parsed = await recognizeImage(worker, buffer);
-            row.push(parsed ?? DEFAULT_CELL);
+            // Call the same function the app uses per cell
+            const cell = await recognizeCellFromImageData(
+              recognizer,
+              imageData,
+              bounds.x + c * cellW,
+              bounds.y + r * cellH,
+              cellW,
+              cellH,
+            );
+            row.push(cell);
           }
           result.push(row);
         }
       } finally {
-        await worker.terminate();
+        await recognizer.dispose();
       }
 
       expect(result).toEqual(expected);
