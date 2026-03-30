@@ -399,6 +399,30 @@
   font-size: 16px;
 }
 
+.scan-progress {
+  text-align: center;
+}
+
+.scan-progress p {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.progress-bar {
+  width: 200px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
 .camera-hint {
   position: absolute;
   top: 48px;

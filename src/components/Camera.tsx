@@ -1,9 +1,9 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { captureFrame, recognizeGrid, drawDetectionOverlay } from '../imageProcessing';
-import type { NoteDuration } from '../types';
+import type { CellValue } from '../types';
 
 interface CameraProps {
-  onCapture: (notes: NoteDuration[][]) => void;
+  onCapture: (values: CellValue[][]) => void;
   onClose: () => void;
 }
 
@@ -13,6 +13,8 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
   const streamRef = useRef<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,7 +33,7 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
           videoRef.current.srcObject = stream;
           videoRef.current.onloadedmetadata = () => setReady(true);
         }
-      } catch (err) {
+      } catch {
         if (!cancelled) {
           setError('Camera access denied. Please allow camera permission and try again.');
         }
@@ -68,13 +70,22 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
     return () => cancelAnimationFrame(animId);
   }, [ready]);
 
-  const handleCapture = useCallback(() => {
+  const handleCapture = useCallback(async () => {
     const video = videoRef.current;
-    if (!video) return;
-    const imageData = captureFrame(video);
-    const notes = recognizeGrid(imageData);
-    onCapture(notes);
-  }, [onCapture]);
+    if (!video || scanning) return;
+
+    setScanning(true);
+    setProgress(0);
+
+    try {
+      const imageData = captureFrame(video);
+      const values = await recognizeGrid(imageData, (pct) => setProgress(pct));
+      onCapture(values);
+    } catch {
+      setError('Recognition failed. Please try again.');
+      setScanning(false);
+    }
+  }, [onCapture, scanning]);
 
   return (
     <div className="camera-container">
@@ -88,15 +99,25 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
           <video ref={videoRef} autoPlay playsInline muted className="camera-video" />
           <canvas ref={canvasRef} className="camera-overlay" />
           <div className="camera-controls">
-            <button className="btn-secondary" onClick={onClose}>Cancel</button>
-            <button className="btn-capture" onClick={handleCapture} disabled={!ready}>
+            <button className="btn-secondary" onClick={onClose} disabled={scanning}>Cancel</button>
+            <button className="btn-capture" onClick={handleCapture} disabled={!ready || scanning}>
               <span className="capture-icon" />
             </button>
-            <div style={{ width: 64 }} /> {/* spacer for centering */}
+            <div style={{ width: 64 }} />
           </div>
           {!ready && <div className="camera-loading">Starting camera...</div>}
+          {scanning && (
+            <div className="camera-loading">
+              <div className="scan-progress">
+                <p>Scanning numbers...</p>
+                <div className="progress-bar">
+                  <div className="progress-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
+                </div>
+              </div>
+            </div>
+          )}
           <div className="camera-hint">
-            Align the 4x4 grid within the guide lines, then tap capture
+            Write numbers in each cell: 1, 2, 4, 8, or tied (e.g. 1+2). Align grid within the guide.
           </div>
         </>
       )}

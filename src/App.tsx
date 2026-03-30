@@ -6,7 +6,7 @@ import PlaybackControls from './components/PlaybackControls';
 import QRShare from './components/QRShare';
 import { createDefaultGrid, extractBars, updateCellValue, validateMagicSquare } from './gridLogic';
 import { playBars, stopPlayback } from './audioEngine';
-import type { MusicGrid, CellValue, NoteDuration } from './types';
+import type { MusicGrid, CellValue } from './types';
 import { DEFAULT_PITCHES, DEFAULT_VALUES } from './types';
 import './App.css';
 
@@ -29,13 +29,13 @@ function App() {
     setGrid((g) => updateCellValue(g, row, col, value));
   }, []);
 
-  const handleCapture = useCallback((notes: NoteDuration[][]) => {
+  const handleCapture = useCallback((values: CellValue[][]) => {
     setGrid(() =>
-      notes.map((row, ri) =>
-        row.map((dur, ci) => ({
+      values.map((row, ri) =>
+        row.map((value, ci) => ({
           row: ri,
           col: ci,
-          value: { kind: 'single' as const, dur },
+          value,
           pitch: DEFAULT_PITCHES[ri][ci],
         }))
       )

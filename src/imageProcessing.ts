@@ -1,19 +1,63 @@
-import { type NoteDuration } from './types';
+import Tesseract from 'tesseract.js';
+import type { CellValue, NoteDuration } from './types';
 
 /**
- * Lightweight image-based note recognition.
- * Analyzes each cell region of a captured grid image to classify the hand-drawn note type.
+ * OCR-based number recognition for hand-drawn 4x4 grids.
  *
- * Strategy:
- * 1. Convert captured image to grayscale
- * 2. Use adaptive thresholding to detect drawn marks
- * 3. Detect the grid lines (find the largest rectangle, divide into 4x4)
- * 4. For each cell, analyze the ink pattern to classify the note type
+ * Each cell contains a number (1, 2, 4, 8) or a tied pair (e.g. "1+2").
+ * Numbers represent sixteenths: 1→1/16, 2→1/8, 4→1/4, 8→1/2.
+ *
+ * Uses Tesseract.js with character whitelist "12348+" for maximum accuracy.
  */
 
-interface Rect { x: number; y: number; w: number; h: number; }
+/** Map a sixteenths numerator to a NoteDuration */
+const NUM_TO_DUR: Record<number, NoteDuration> = {
+  1: '1/16',
+  2: '1/8',
+  4: '1/4',
+  8: '1/2',
+};
 
-/** Get image data from a video element or canvas */
+/** All valid single values */
+const VALID_SINGLES = new Set([1, 2, 4, 8]);
+
+/** All valid tied pairs (sorted smaller first) */
+const VALID_PAIRS: [number, number][] = [
+  [1, 2], [1, 4], [1, 8],
+  [2, 4], [2, 8],
+  [4, 8],
+];
+
+/** Parse a recognized string into a CellValue, or null if unrecognizable */
+function parseCellText(text: string): CellValue | null {
+  // Clean up OCR artifacts
+  const clean = text.replace(/\s/g, '').replace(/[oO]/g, '0');
+
+  // Try single number
+  const singleMatch = clean.match(/^(\d+)$/);
+  if (singleMatch) {
+    const n = parseInt(singleMatch[1], 10);
+    if (VALID_SINGLES.has(n) && NUM_TO_DUR[n]) {
+      return { kind: 'single', dur: NUM_TO_DUR[n] };
+    }
+  }
+
+  // Try tied pair: "N+M" in any order
+  const pairMatch = clean.match(/^(\d+)\+(\d+)$/);
+  if (pairMatch) {
+    let a = parseInt(pairMatch[1], 10);
+    let b = parseInt(pairMatch[2], 10);
+    // Normalize order: smaller first
+    if (a > b) [a, b] = [b, a];
+    if (VALID_PAIRS.some(([x, y]) => x === a && y === b) && NUM_TO_DUR[a] && NUM_TO_DUR[b]) {
+      return { kind: 'tied', first: NUM_TO_DUR[a], second: NUM_TO_DUR[b] };
+    }
+  }
+
+  return null;
+}
+
+/** Get image data from a video element */
 export function captureFrame(video: HTMLVideoElement): ImageData {
   const canvas = document.createElement('canvas');
   canvas.width = video.videoWidth;
@@ -23,54 +67,47 @@ export function captureFrame(video: HTMLVideoElement): ImageData {
   return ctx.getImageData(0, 0, canvas.width, canvas.height);
 }
 
-/** Convert ImageData to grayscale values */
-function toGrayscale(img: ImageData): Uint8Array {
-  const gray = new Uint8Array(img.width * img.height);
-  for (let i = 0; i < gray.length; i++) {
-    const r = img.data[i * 4];
-    const g = img.data[i * 4 + 1];
-    const b = img.data[i * 4 + 2];
-    gray[i] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
-  }
-  return gray;
+/** Extract a sub-region of an ImageData as a new canvas for Tesseract */
+function extractCellCanvas(
+  imageData: ImageData,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d')!;
+
+  // Create a temporary canvas with the full image
+  const tmp = document.createElement('canvas');
+  tmp.width = imageData.width;
+  tmp.height = imageData.height;
+  const tmpCtx = tmp.getContext('2d')!;
+  tmpCtx.putImageData(imageData, 0, 0);
+
+  // Draw the cropped region with padding
+  const pad = Math.round(Math.min(w, h) * 0.05);
+  ctx.fillStyle = 'white';
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(tmp, x + pad, y + pad, w - 2 * pad, h - 2 * pad, 0, 0, w, h);
+
+  return canvas;
 }
 
-/** Simple adaptive threshold */
-function adaptiveThreshold(gray: Uint8Array, w: number, h: number, blockSize: number = 15): Uint8Array {
-  const binary = new Uint8Array(w * h);
-  const half = Math.floor(blockSize / 2);
+/** Detect the grid bounding box from the image (find the drawn grid area) */
+function detectGridBounds(imageData: ImageData): { x: number; y: number; w: number; h: number } {
+  const { width: w, height: h, data } = imageData;
 
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      let sum = 0;
-      let count = 0;
-      for (let dy = -half; dy <= half; dy++) {
-        for (let dx = -half; dx <= half; dx++) {
-          const ny = y + dy;
-          const nx = x + dx;
-          if (ny >= 0 && ny < h && nx >= 0 && nx < w) {
-            sum += gray[ny * w + nx];
-            count++;
-          }
-        }
-      }
-      const mean = sum / count;
-      binary[y * w + x] = gray[y * w + x] < mean - 10 ? 0 : 255;
-    }
-  }
-  return binary;
-}
-
-/** Try to detect a 4x4 grid from the binary image.
- *  Returns the bounding rect of the grid if found, otherwise uses the whole image. */
-function detectGridBounds(binary: Uint8Array, w: number, h: number): Rect {
-  // Simple approach: find the bounding box of dark pixels (the drawn grid)
   let minX = w, minY = h, maxX = 0, maxY = 0;
   let darkCount = 0;
 
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
-      if (binary[y * w + x] === 0) {
+      const i = (y * w + x) * 4;
+      const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      if (gray < 128) {
         darkCount++;
         if (x < minX) minX = x;
         if (y < minY) minY = y;
@@ -81,12 +118,10 @@ function detectGridBounds(binary: Uint8Array, w: number, h: number): Rect {
   }
 
   if (darkCount < 100) {
-    // Not enough ink detected, use center square
     const size = Math.min(w, h) * 0.8;
     return { x: (w - size) / 2, y: (h - size) / 2, w: size, h: size };
   }
 
-  // Add padding
   const pad = 5;
   return {
     x: Math.max(0, minX - pad),
@@ -96,75 +131,62 @@ function detectGridBounds(binary: Uint8Array, w: number, h: number): Rect {
   };
 }
 
-/** Classify a cell region based on ink density and distribution */
-function classifyCell(binary: Uint8Array, w: number, cellRect: Rect): NoteDuration {
-  let totalPixels = 0;
-  let darkPixels = 0;
-  let darkInCenter = 0;
-  let centerPixels = 0;
+/**
+ * Recognize a 4x4 grid of hand-drawn numbers using Tesseract OCR.
+ * Returns a 4x4 array of CellValues.
+ * Falls back to quarter note for any unrecognizable cell.
+ */
+export async function recognizeGrid(
+  imageData: ImageData,
+  onProgress?: (pct: number) => void,
+): Promise<CellValue[][]> {
+  const bounds = detectGridBounds(imageData);
+  const cellW = Math.floor(bounds.w / 4);
+  const cellH = Math.floor(bounds.h / 4);
 
-  const cx = cellRect.x + cellRect.w / 2;
-  const cy = cellRect.y + cellRect.h / 2;
-  const centerRadius = Math.min(cellRect.w, cellRect.h) * 0.3;
-
-  // Count dark pixels in the cell, and separately in the center
-  for (let y = Math.floor(cellRect.y); y < Math.floor(cellRect.y + cellRect.h); y++) {
-    for (let x = Math.floor(cellRect.x); x < Math.floor(cellRect.x + cellRect.w); x++) {
-      if (x < 0 || x >= w || y < 0) continue;
-      totalPixels++;
-      const isDark = binary[y * w + x] === 0;
-      if (isDark) darkPixels++;
-
-      const dist = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2);
-      if (dist < centerRadius) {
-        centerPixels++;
-        if (isDark) darkInCenter++;
-      }
-    }
-  }
-
-  if (totalPixels === 0) return '1/4';
-
-  const density = darkPixels / totalPixels;
-  const centerDensity = centerPixels > 0 ? darkInCenter / centerPixels : 0;
-
-  // Classification heuristics based on ink density:
-  // - Very low density → sixteenth (small symbol)
-  // - High density + filled center → quarter
-  // - Moderate density hollow center → half
-  // - Otherwise → eighth
-  if (density < 0.05) return '1/16';
-  if (density > 0.25 && centerDensity > 0.4) return '1/4';
-  if (density > 0.15 && centerDensity < 0.3) return '1/2';
-  if (density > 0.2) return '1/8';
-  return '1/4';
-}
-
-/** Process a captured frame and return a 4x4 grid of recognized notes */
-export function recognizeGrid(imageData: ImageData): NoteDuration[][] {
-  const { width: w, height: h } = imageData;
-  const gray = toGrayscale(imageData);
-  const binary = adaptiveThreshold(gray, w, h);
-  const bounds = detectGridBounds(binary, w, h);
-
-  const cellW = bounds.w / 4;
-  const cellH = bounds.h / 4;
-
-  const result: NoteDuration[][] = [];
-
+  // Extract all 16 cell images
+  const cellCanvases: { r: number; c: number; canvas: HTMLCanvasElement }[] = [];
   for (let r = 0; r < 4; r++) {
-    const row: NoteDuration[] = [];
     for (let c = 0; c < 4; c++) {
-      const cellRect: Rect = {
-        x: bounds.x + c * cellW + cellW * 0.1,
-        y: bounds.y + r * cellH + cellH * 0.1,
-        w: cellW * 0.8,
-        h: cellH * 0.8,
-      };
-      row.push(classifyCell(binary, w, cellRect));
+      const canvas = extractCellCanvas(
+        imageData,
+        Math.floor(bounds.x + c * cellW),
+        Math.floor(bounds.y + r * cellH),
+        cellW,
+        cellH,
+      );
+      cellCanvases.push({ r, c, canvas });
     }
-    result.push(row);
   }
+
+  // Create a Tesseract worker with character whitelist
+  const worker = await Tesseract.createWorker('eng', Tesseract.OEM.LSTM_ONLY, {
+    logger: (m) => {
+      if (m.status === 'recognizing text' && onProgress) {
+        onProgress(m.progress);
+      }
+    },
+  });
+  await worker.setParameters({
+    tessedit_char_whitelist: '12348+',
+    tessedit_pageseg_mode: Tesseract.PSM.SINGLE_WORD,
+  });
+
+  // OCR each cell
+  const result: CellValue[][] = Array.from({ length: 4 }, () => Array(4).fill(null));
+  const defaultValue: CellValue = { kind: 'single', dur: '1/4' };
+
+  for (const { r, c, canvas } of cellCanvases) {
+    try {
+      const { data } = await worker.recognize(canvas);
+      const parsed = parseCellText(data.text.trim());
+      result[r][c] = parsed ?? defaultValue;
+    } catch {
+      result[r][c] = defaultValue;
+    }
+  }
+
+  await worker.terminate();
 
   return result;
 }
@@ -177,7 +199,6 @@ export function drawDetectionOverlay(
   canvasW: number,
   canvasH: number,
 ) {
-  // Draw guide grid overlay
   const scale = Math.min(canvasW / videoW, canvasH / videoH);
   const gridSize = Math.min(videoW, videoH) * 0.7 * scale;
   const gx = (canvasW - gridSize) / 2;
@@ -187,10 +208,8 @@ export function drawDetectionOverlay(
   ctx.lineWidth = 2;
   ctx.setLineDash([8, 4]);
 
-  // Outer border
   ctx.strokeRect(gx, gy, gridSize, gridSize);
 
-  // Inner grid lines
   const cellSize = gridSize / 4;
   for (let i = 1; i < 4; i++) {
     ctx.beginPath();
@@ -205,4 +224,16 @@ export function drawDetectionOverlay(
   }
 
   ctx.setLineDash([]);
+
+  // Draw example numbers in each cell for guidance
+  ctx.font = `${cellSize * 0.3}px sans-serif`;
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const examples = ['8', '4', '1', '2+1', '1', '2+1', '8', '4', '2+1', '1', '4', '8', '4', '8', '2+1', '1'];
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      ctx.fillText(examples[r * 4 + c], gx + c * cellSize + cellSize / 2, gy + r * cellSize + cellSize / 2);
+    }
+  }
 }
