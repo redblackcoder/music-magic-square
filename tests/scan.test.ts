@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { existsSync } from 'fs';
 import path from 'path';
 import { createCanvas, loadImage } from 'canvas';
-import { createDigitRecognizer, type DigitRecognizer } from '../src/digitRecognizer';
+import { createCellRecognizer, type CellRecognizer } from '../src/digitRecognizer';
 import {
   parseCellText,
   recognizeCellFromImageData,
@@ -97,10 +97,13 @@ const CELL_CASES: { file: string; expected: CellValue }[] = [
 ];
 
 describe('single cell OCR', () => {
-  let recognizer: DigitRecognizer;
+  let recognizer: CellRecognizer;
 
   beforeAll(async () => {
-    recognizer = await createDigitRecognizer(MODEL_PATH);
+    // Use MNIST 10-class model for single digit tests
+    // Once cell-recognizer.onnx is trained, switch to that
+    const DIGIT_LABELS = ['0','1','2','3','4','5','6','7','8','9'];
+    recognizer = await createCellRecognizer(MODEL_PATH, DIGIT_LABELS);
   });
 
   afterAll(async () => {
@@ -162,7 +165,8 @@ describe('full grid OCR', () => {
       const cellW = bounds.w / 4;
       const cellH = bounds.h / 4;
 
-      const recognizer = await createDigitRecognizer(MODEL_PATH);
+      const DIGIT_LABELS = ['0','1','2','3','4','5','6','7','8','9'];
+      const recognizer = await createCellRecognizer(MODEL_PATH, DIGIT_LABELS);
       const result: CellValue[][] = [];
 
       try {

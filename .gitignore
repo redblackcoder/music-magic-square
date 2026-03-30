@@ -27,3 +27,11 @@ dist-ssr
 
 # raw data
 data/*
+
+# model training generated data (regenerate with: node model-training/generate-synthetic.mjs)
+model-training/synthetic/
+model-training/handwritten/
+model-training/preview.png
+model-training/checkpoint.pt
+model-training/mnist_data/
+eng.traineddata

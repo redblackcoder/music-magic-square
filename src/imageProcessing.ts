@@ -1,13 +1,15 @@
-import { createDigitRecognizer, prepareDigitInput, type DigitRecognizer } from './digitRecognizer';
+import { createCellRecognizer, prepareDigitInput, type CellRecognizer } from './digitRecognizer';
 import type { CellValue, NoteDuration } from './types';
 
 /**
- * ONNX-based digit recognition for hand-drawn 4x4 grids.
+ * ONNX-based recognition for hand-drawn 4x4 grids.
+ *
+ * Supports two models:
+ * - cell-recognizer.onnx (65 classes): digits + sums like "2+4"
+ * - mnist-12.onnx (10 classes): single digits only (fallback)
  *
  * Each cell contains a number (1, 2, 4, 8) or a tied pair (e.g. "1+2").
  * Numbers represent sixteenths: 1→1/16, 2→1/8, 4→1/4, 8→1/2.
- *
- * Uses the official MNIST ONNX model (26 KB) for digit classification.
  */
 
 /** Map a sixteenths numerator to a NoteDuration */
@@ -64,6 +66,15 @@ export function digitToCellValue(digit: number): CellValue | null {
   return null;
 }
 
+/**
+ * Convert a class label (e.g., "4", "2+8") to a CellValue.
+ * Handles both single digits and sum expressions.
+ * For sums, normalizes order (smaller first) and validates the pair.
+ */
+export function labelToCellValue(label: string): CellValue | null {
+  return parseCellText(label);
+}
+
 /** Get image data from a video element */
 export function captureFrame(video: HTMLVideoElement): ImageData {
   const canvas = document.createElement('canvas');
@@ -110,11 +121,11 @@ export function detectGridBounds(imageData: ImageData): { x: number; y: number; 
 }
 
 /**
- * Recognize a single cell image using the MNIST model.
- * The image should contain a single hand-drawn digit.
+ * Recognize a single cell image using a CellRecognizer.
+ * Works with both the 65-class model and the 10-class MNIST wrapper.
  */
 export async function recognizeCellFromImageData(
-  recognizer: DigitRecognizer,
+  recognizer: CellRecognizer,
   imageData: ImageData,
   x: number,
   y: number,
@@ -140,15 +151,15 @@ export async function recognizeCellFromImageData(
     ch,
   );
 
-  const { digit, confidence } = await recognizer.recognize(pixels);
+  const { label, confidence } = await recognizer.recognize(pixels);
 
   if (confidence < 0.5) return DEFAULT_CELL;
-
-  return digitToCellValue(digit) ?? DEFAULT_CELL;
+  return labelToCellValue(label) ?? DEFAULT_CELL;
 }
 
 /**
- * Recognize a 4x4 grid of hand-drawn numbers using ONNX MNIST model.
+ * Recognize a 4x4 grid of hand-drawn numbers/sums.
+ * Tries cell-recognizer.onnx (65-class) first, falls back to mnist-12.onnx (10-class).
  */
 export async function recognizeGrid(
   imageData: ImageData,
@@ -158,9 +169,15 @@ export async function recognizeGrid(
   const cellW = bounds.w / 4;
   const cellH = bounds.h / 4;
 
-  // In browser, model is served from public/
-  const modelPath = new URL('/mnist-12.onnx', window.location.origin).href;
-  const recognizer = await createDigitRecognizer(modelPath);
+  // Try 65-class model first, fall back to MNIST
+  let recognizer: CellRecognizer;
+  try {
+    const modelPath = new URL('/cell-recognizer.onnx', window.location.origin).href;
+    recognizer = await createCellRecognizer(modelPath);
+  } catch {
+    const modelPath = new URL('/mnist-12.onnx', window.location.origin).href;
+    recognizer = await createCellRecognizer(modelPath, ['0','1','2','3','4','5','6','7','8','9']);
+  }
 
   const result: CellValue[][] = [];
 
