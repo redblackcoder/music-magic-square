@@ -98,13 +98,28 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
           return;
         }
         streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.onloadedmetadata = () => {
-            console.log('[camera] video ready:', videoRef.current?.videoWidth, '×', videoRef.current?.videoHeight);
-            videoRef.current?.play();
-            setReady(true);
+        const video = videoRef.current;
+        console.log('[camera] videoRef.current is:', video ? 'present' : 'NULL');
+        if (video) {
+          console.log('[camera] video readyState:', video.readyState, 'networkState:', video.networkState);
+          console.log('[camera] video currentSrc:', video.currentSrc, 'srcObject:', video.srcObject);
+          video.onloadedmetadata = () => {
+            console.log('[camera] onloadedmetadata fired, videoWidth:', video.videoWidth, '×', video.videoHeight);
+            video.play().then(() => {
+              console.log('[camera] play() resolved');
+              setReady(true);
+            }).catch(err => {
+              console.error('[camera] play() rejected:', err);
+              setReady(true); // still allow capture
+            });
           };
-          videoRef.current.srcObject = stream;
+          video.onerror = (e) => {
+            console.error('[camera] video error event:', e, 'video.error:', video.error);
+          };
+          video.srcObject = stream;
+          console.log('[camera] srcObject assigned, readyState now:', video.readyState);
+        } else {
+          console.error('[camera] videoRef is null — cannot attach stream');
         }
       } catch (err) {
         console.error('[camera] getUserMedia failed:', err);
