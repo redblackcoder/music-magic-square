@@ -15,7 +15,7 @@ export async function initOpenCV(): Promise<CV> {
   if (_cv) return _cv;
   // @techstark/opencv-js exports a thenable that resolves when WASM is ready
   const mod = await import('@techstark/opencv-js');
-  const raw = mod.default ?? mod;
+  const raw: CV = mod.default ?? mod;
   // The module itself is a thenable — await it to get the initialized cv object
   _cv = typeof raw.then === 'function' ? await raw : raw;
   return _cv;
