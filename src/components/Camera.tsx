@@ -99,12 +99,12 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
         }
         streamRef.current = stream;
         if (videoRef.current) {
-          videoRef.current.srcObject = stream;
           videoRef.current.onloadedmetadata = () => {
             console.log('[camera] video ready:', videoRef.current?.videoWidth, '×', videoRef.current?.videoHeight);
             videoRef.current?.play();
             setReady(true);
           };
+          videoRef.current.srcObject = stream;
         }
       } catch (err) {
         console.error('[camera] getUserMedia failed:', err);
