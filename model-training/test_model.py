@@ -81,6 +81,9 @@ def evaluate_pytorch(samples, checkpoint_path, device):
         for path, true_idx, true_label in samples:
             img = Image.open(path).convert("L")
             tensor = transform(img).unsqueeze(0).to(device)
+            # Auto-invert if background is light (handwritten = dark on white)
+            if tensor.mean() > 0.5:
+                tensor = 1.0 - tensor
             output = model(tensor)
             pred_idx = output.argmax(1).item()
             pred_label = CLASSES[pred_idx]
@@ -118,6 +121,9 @@ def evaluate_onnx(samples, onnx_path):
     for path, true_idx, true_label in samples:
         img = Image.open(path).convert("L")
         tensor = transform(img).unsqueeze(0).numpy()
+        # Auto-invert if background is light (handwritten = dark on white)
+        if tensor.mean() > 0.5:
+            tensor = 1.0 - tensor
         output = session.run(None, {input_name: tensor})[0]
         pred_idx = int(np.argmax(output[0]))
         pred_label = CLASSES[pred_idx]

@@ -133,6 +133,10 @@ class FolderDataset(Dataset):
         else:
             img = transforms.ToTensor()(img)
 
+        # Auto-invert if background is light (handwritten = dark on white paper)
+        if img.mean() > 0.5:
+            img = 1.0 - img
+
         return img, label
 
 
@@ -324,12 +328,16 @@ def main():
         if len(hw_dataset) > 0:
             print(f"\n── Phase 3: Fine-tuning on handwritten data ──")
 
-            # Combine handwritten with some synthetic to prevent catastrophic forgetting
-            combined = ConcatDataset([hw_dataset, train_set])
+            # Oversample handwritten data so it's ~50% of the combined set
+            hw_repeats = max(1, len(train_set) // len(hw_dataset))
+            hw_oversampled = ConcatDataset([hw_dataset] * hw_repeats)
+            combined = ConcatDataset([hw_oversampled, train_set])
+            print(f"  Handwritten: {len(hw_dataset)} × {hw_repeats} = {len(hw_oversampled)}, "
+                  f"Synthetic: {len(train_set)}, Total: {len(combined)}")
             combined_loader = DataLoader(combined, batch_size=64, shuffle=True, num_workers=0)
 
             train(model, combined_loader, val_loader, device,
-                  epochs=min(10, args.epochs), lr=5e-4, label="Fine-tune ")
+                  epochs=min(15, args.epochs), lr=3e-4, label="Fine-tune ")
         else:
             print(f"\nNo handwritten images found in {args.handwritten}, skipping fine-tune.")
 

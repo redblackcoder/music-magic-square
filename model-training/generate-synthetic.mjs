@@ -11,7 +11,8 @@
  * that order doesn't matter.
  *
  * Images are 28x28 grayscale PNG (white-on-black, MNIST convention).
- * Kept to 50 samples/class to avoid overfitting and preserve MNIST pre-training.
+ * Sum expressions render each component (digit, +, digit) separately
+ * with controlled spacing to stay legible at 28x28.
  */
 
 import { createCanvas } from 'canvas';
@@ -27,8 +28,7 @@ for (let a = 0; a <= 9; a++) {
   }
 }
 
-// Low count to complement (not replace) MNIST pre-training
-const SAMPLES_PER_CLASS = 50;
+const SAMPLES_PER_CLASS = 200;
 const IMG_SIZE = 28;
 const OUTPUT_DIR = path.resolve('model-training/synthetic');
 
@@ -36,6 +36,9 @@ const FONTS = [
   'sans-serif', 'serif', 'monospace', 'Georgia',
   'Courier New', 'Arial', 'Helvetica', 'Times New Roman',
 ];
+
+// Stroke weight variations: some fonts look bolder/thinner
+const WEIGHTS = ['bold', '900', '700', 'normal'];
 
 function rand(min, max) {
   return Math.random() * (max - min) + min;
@@ -45,21 +48,66 @@ function randInt(min, max) {
   return Math.floor(rand(min, max + 1));
 }
 
+function pick(arr) {
+  return arr[randInt(0, arr.length - 1)];
+}
+
 /**
- * Render a label at high resolution then downscale to 28x28.
- * Uses 224px intermediate canvas (8x) for clean anti-aliasing.
- * Large bold fonts so text is clearly readable even at 28x28.
+ * Render a single digit at high resolution.
  */
-function renderSample(label) {
+function renderDigitSample(label) {
   const hiRes = 224;
   const canvas = createCanvas(hiRes, hiRes);
   const ctx = canvas.getContext('2d');
 
-  // Black background
   ctx.fillStyle = 'black';
   ctx.fillRect(0, 0, hiRes, hiRes);
 
-  // Mild random transform — keep it readable
+  const angle = rand(-10, 10) * (Math.PI / 180);
+  const scale = rand(0.82, 1.08);
+  const dx = rand(-12, 12);
+  const dy = rand(-12, 12);
+
+  ctx.save();
+  ctx.translate(hiRes / 2 + dx, hiRes / 2 + dy);
+  ctx.rotate(angle);
+  ctx.scale(scale, scale);
+
+  const font = pick(FONTS);
+  const weight = pick(WEIGHTS);
+  const fontSize = rand(90, 140);
+
+  ctx.font = `${weight} ${fontSize}px ${font}`;
+  ctx.fillStyle = 'white';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, 0, 0);
+  ctx.restore();
+
+  return canvas;
+}
+
+/**
+ * Render a sum expression (e.g. "2+4") by drawing each component separately.
+ * This gives much better control over sizing and spacing than fillText("2+4").
+ */
+function renderSumSample(label) {
+  const hiRes = 224;
+  const canvas = createCanvas(hiRes, hiRes);
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = 'black';
+  ctx.fillRect(0, 0, hiRes, hiRes);
+
+  const [left, right] = label.split('+');
+  const font = pick(FONTS);
+  const weight = pick(WEIGHTS);
+
+  // Digits rendered large, + sign smaller
+  const digitSize = rand(70, 95);
+  const plusSize = rand(50, 70);
+  const gap = rand(2, 12); // spacing between components
+
   const angle = rand(-8, 8) * (Math.PI / 180);
   const scale = rand(0.85, 1.05);
   const dx = rand(-8, 8);
@@ -70,18 +118,44 @@ function renderSample(label) {
   ctx.rotate(angle);
   ctx.scale(scale, scale);
 
-  const font = FONTS[randInt(0, FONTS.length - 1)];
-  const isSum = label.includes('+');
+  // Measure widths to center the whole expression
+  ctx.font = `${weight} ${digitSize}px ${font}`;
+  const leftW = ctx.measureText(left).width;
+  const rightW = ctx.measureText(right).width;
+  ctx.font = `${weight} ${plusSize}px ${font}`;
+  const plusW = ctx.measureText('+').width;
 
-  // Large bold fonts — sums get slightly smaller to fit the "+"
-  const baseFontSize = isSum ? rand(52, 68) : rand(90, 130);
+  const totalW = leftW + gap + plusW + gap + rightW;
+  let x = -totalW / 2;
 
-  ctx.font = `bold ${baseFontSize}px ${font}`;
+  // Draw left digit
+  ctx.font = `${weight} ${digitSize}px ${font}`;
   ctx.fillStyle = 'white';
-  ctx.textAlign = 'center';
+  ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText(label, 0, 0);
+  ctx.fillText(left, x, 0);
+  x += leftW + gap;
+
+  // Draw + sign (slightly smaller, vertically centered)
+  ctx.font = `${weight} ${plusSize}px ${font}`;
+  ctx.fillText('+', x, 0);
+  x += plusW + gap;
+
+  // Draw right digit
+  ctx.font = `${weight} ${digitSize}px ${font}`;
+  ctx.fillText(right, x, 0);
+
   ctx.restore();
+  return canvas;
+}
+
+/**
+ * Render a label at high resolution then downscale to 28x28 with post-processing.
+ */
+function renderSample(label) {
+  const hiRes = 224;
+  const isSum = label.includes('+');
+  const canvas = isSum ? renderSumSample(label) : renderDigitSample(label);
 
   // Downscale to 28x28 with smoothing
   const out = createCanvas(IMG_SIZE, IMG_SIZE);
@@ -90,14 +164,16 @@ function renderSample(label) {
   outCtx.imageSmoothingQuality = 'high';
   outCtx.drawImage(canvas, 0, 0, IMG_SIZE, IMG_SIZE);
 
-  // Light noise only
+  // Post-processing: noise + slight brightness variation
   const imageData = outCtx.getImageData(0, 0, IMG_SIZE, IMG_SIZE);
   const d = imageData.data;
-  const noiseLevel = rand(0, 10);
+  const noiseLevel = rand(0, 15);
+  const brightnessMult = rand(0.8, 1.0); // simulate faded ink
 
   for (let i = 0; i < d.length; i += 4) {
     const noise = (Math.random() - 0.5) * noiseLevel;
-    const val = Math.max(0, Math.min(255, d[i] + noise));
+    let val = d[i] * brightnessMult + noise;
+    val = Math.max(0, Math.min(255, val));
     d[i] = d[i + 1] = d[i + 2] = val;
     d[i + 3] = 255;
   }
@@ -143,5 +219,5 @@ for (const label of CLASSES) {
   }
 }
 
-console.log(`\nDone! ${total} images in ${OUTPUT_DIR}`);
+console.log(`\nDone! ${total} images in ${OUTPUT_DIR} (${SAMPLES_PER_CLASS}/class)`);
 console.log(`Class index written to model-training/classes.json (${CLASSES.length} classes)`);
