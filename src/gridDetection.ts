@@ -8,26 +8,73 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CV = any;
 
-let _cv: CV | null = null;
+let _cvPromise: Promise<CV> | null = null;
 
-/** Lazy-load OpenCV. Call once before using detectGrid(). */
-export async function initOpenCV(): Promise<CV> {
-  if (_cv) {
-    console.log('[opencv] already initialized');
-    return _cv;
+/** Lazy-load OpenCV. Multiple calls share the same in-flight promise. */
+export function initOpenCV(): Promise<CV> {
+  if (!_cvPromise) {
+    _cvPromise = doInitOpenCV();
   }
-  console.log('[opencv] importing @techstark/opencv-js...');
+  return _cvPromise;
+}
+
+async function doInitOpenCV(): Promise<CV> {
+  console.log('[opencv] loading OpenCV from CDN via script tag...');
   const t0 = performance.now();
-  const mod = await import('@techstark/opencv-js');
-  console.log('[opencv] module imported in', Math.round(performance.now() - t0), 'ms');
-  console.log('[opencv] mod keys:', Object.keys(mod).slice(0, 10).join(', '));
-  const raw: CV = mod.default ?? mod;
-  console.log('[opencv] raw type:', typeof raw, 'has .then:', typeof raw.then === 'function');
-  // The module itself is a thenable — await it to get the initialized cv object
-  _cv = typeof raw.then === 'function' ? await raw : raw;
+
+  // Load via script tag — the official/reliable way to use OpenCV.js in browsers.
+  // The npm package's Emscripten thenable doesn't resolve reliably in Vite's bundled context.
+  const cv = await new Promise<CV>((resolve, reject) => {
+    // Already loaded (e.g. by a previous attempt that was GC'd before we cached)
+    if ((window as CV).cv?.Mat) {
+      console.log('[opencv] already on window');
+      resolve((window as CV).cv);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://docs.opencv.org/4.10.0/opencv.js';
+    script.async = true;
+
+    // OpenCV.js sets window.cv and calls Module.onRuntimeInitialized when ready
+    script.onload = () => {
+      console.log('[opencv] script loaded in', Math.round(performance.now() - t0), 'ms');
+      const check = (window as CV).cv;
+      if (check?.Mat) {
+        console.log('[opencv] cv ready immediately');
+        resolve(check);
+      } else if (check && typeof check.then === 'function') {
+        console.log('[opencv] cv is thenable, awaiting...');
+        check.then((resolved: CV) => {
+          console.log('[opencv] thenable resolved in', Math.round(performance.now() - t0), 'ms');
+          resolve(resolved);
+        });
+      } else {
+        // Poll for cv.Mat to appear (Emscripten async init)
+        console.log('[opencv] polling for cv.Mat...');
+        const interval = setInterval(() => {
+          const g = (window as CV).cv;
+          if (g?.Mat) {
+            clearInterval(interval);
+            console.log('[opencv] cv ready after polling in', Math.round(performance.now() - t0), 'ms');
+            resolve(g);
+          }
+        }, 100);
+        // Timeout after 30s
+        setTimeout(() => {
+          clearInterval(interval);
+          reject(new Error('OpenCV init timed out after 30s'));
+        }, 30000);
+      }
+    };
+
+    script.onerror = () => reject(new Error('Failed to load OpenCV.js from CDN'));
+    document.head.appendChild(script);
+  });
+
   console.log('[opencv] initialized in', Math.round(performance.now() - t0), 'ms total');
-  console.log('[opencv] cv has Mat:', typeof _cv.Mat, 'Canny:', typeof _cv.Canny);
-  return _cv;
+  console.log('[opencv] cv has Mat:', typeof cv.Mat, 'Canny:', typeof cv.Canny);
+  return cv;
 }
 
 export interface CellBounds {
