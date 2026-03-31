@@ -1,5 +1,20 @@
 import { createCellRecognizer, prepareDigitInput, type CellRecognizer } from './digitRecognizer';
+import { detectGrid } from './gridDetection';
 import type { CellValue, NoteDuration } from './types';
+
+/** Result of scanning a grid image, including diagnostics for preview */
+export interface ScanResult {
+  /** Recognized cell values (4×4) */
+  values: CellValue[][];
+  /** The captured source image */
+  sourceImage: ImageData;
+  /** Whether a quadrilateral grid outline was found (vs fallback bounding box) */
+  gridFound: boolean;
+  /** The 4 corners of the detected quad in source image coords [tl, tr, br, bl] */
+  quadCorners: [number, number][];
+  /** The perspective-corrected grid image */
+  warpedImage: ImageData;
+}
 
 /**
  * ONNX-based recognition for hand-drawn 4x4 grids.
@@ -159,15 +174,27 @@ export async function recognizeCellFromImageData(
 
 /**
  * Recognize a 4x4 grid of hand-drawn numbers/sums.
- * Tries cell-recognizer.onnx (65-class) first, falls back to mnist-12.onnx (10-class).
+ * Uses OpenCV for grid detection (edge detection + perspective transform),
+ * then ONNX model for cell content recognition.
+ *
+ * Returns a ScanResult with diagnostic info for preview/confirmation.
  */
 export async function recognizeGrid(
   imageData: ImageData,
   onProgress?: (pct: number) => void,
-): Promise<CellValue[][]> {
-  const bounds = detectGridBounds(imageData);
-  const cellW = bounds.w / 4;
-  const cellH = bounds.h / 4;
+): Promise<ScanResult> {
+  // Detect grid with OpenCV (perspective-corrected)
+  const { warped, cells, quadCorners } = await detectGrid(imageData);
+
+  // Check if a real quad was found (corners form a non-trivial quadrilateral)
+  // The fallback produces an axis-aligned rectangle from bounding box
+  const [tl, tr, br, bl] = quadCorners;
+  const isAxisAligned =
+    Math.abs(tl[1] - tr[1]) < 2 &&
+    Math.abs(bl[1] - br[1]) < 2 &&
+    Math.abs(tl[0] - bl[0]) < 2 &&
+    Math.abs(tr[0] - br[0]) < 2;
+  const gridFound = !isAxisAligned;
 
   // Try 65-class model first, fall back to MNIST
   let recognizer: CellRecognizer;
@@ -179,30 +206,26 @@ export async function recognizeGrid(
     recognizer = await createCellRecognizer(modelPath, ['0','1','2','3','4','5','6','7','8','9']);
   }
 
-  const result: CellValue[][] = [];
+  const values: CellValue[][] = [[], [], [], []];
 
   try {
-    for (let r = 0; r < 4; r++) {
-      const row: CellValue[] = [];
-      for (let c = 0; c < 4; c++) {
-        const cell = await recognizeCellFromImageData(
-          recognizer,
-          imageData,
-          bounds.x + c * cellW,
-          bounds.y + r * cellH,
-          cellW,
-          cellH,
-        );
-        row.push(cell);
-        onProgress?.((r * 4 + c + 1) / 16);
-      }
-      result.push(row);
+    for (let i = 0; i < cells.length; i++) {
+      const { x, y, w, h, row } = cells[i];
+      const cell = await recognizeCellFromImageData(recognizer, warped, x, y, w, h);
+      values[row].push(cell);
+      onProgress?.((i + 1) / 16);
     }
   } finally {
     await recognizer.dispose();
   }
 
-  return result;
+  return {
+    values,
+    sourceImage: imageData,
+    gridFound,
+    quadCorners,
+    warpedImage: warped,
+  };
 }
 
 /** Draw detection overlay on a canvas for visual feedback */

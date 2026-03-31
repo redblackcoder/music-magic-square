@@ -43,3 +43,6 @@ model-training/_debug_mask.png
 model-training/.venv/
 model-training/uv.lock
 eng.traineddata
+
+# test diagnose data
+tests/fixtures/grids/*.png

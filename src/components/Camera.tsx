@@ -1,10 +1,23 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import { captureFrame, recognizeGrid } from '../imageProcessing';
-import type { CellValue } from '../types';
+import { captureFrame, recognizeGrid, type ScanResult } from '../imageProcessing';
+import type { CellValue, NoteDuration } from '../types';
 
 interface CameraProps {
   onCapture: (values: CellValue[][]) => void;
   onClose: () => void;
+}
+
+/** Map duration back to the hand-written number for display */
+const DUR_TO_NUM: Record<NoteDuration, string> = {
+  '1/16': '1',
+  '1/8': '2',
+  '1/4': '4',
+  '1/2': '8',
+};
+
+function cellLabel(v: CellValue): string {
+  if (v.kind === 'single') return DUR_TO_NUM[v.dur] ?? '?';
+  return `${DUR_TO_NUM[v.first] ?? '?'}+${DUR_TO_NUM[v.second] ?? '?'}`;
 }
 
 const GHOST_NUMBERS = [
@@ -17,10 +30,12 @@ const GHOST_NUMBERS = [
 export default function Camera({ onCapture, onClose }: CameraProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,6 +72,40 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
     };
   }, []);
 
+  // Draw preview overlay when scan result arrives
+  useEffect(() => {
+    if (!scanResult || !previewCanvasRef.current) return;
+
+    const canvas = previewCanvasRef.current;
+    const { sourceImage, quadCorners, gridFound } = scanResult;
+    canvas.width = sourceImage.width;
+    canvas.height = sourceImage.height;
+
+    const ctx = canvas.getContext('2d')!;
+    ctx.putImageData(sourceImage, 0, 0);
+
+    // Draw detected quadrilateral
+    const [tl, tr, br, bl] = quadCorners;
+    ctx.strokeStyle = gridFound ? '#00ff00' : '#ff6600';
+    ctx.lineWidth = Math.max(3, sourceImage.width / 300);
+    ctx.beginPath();
+    ctx.moveTo(tl[0], tl[1]);
+    ctx.lineTo(tr[0], tr[1]);
+    ctx.lineTo(br[0], br[1]);
+    ctx.lineTo(bl[0], bl[1]);
+    ctx.closePath();
+    ctx.stroke();
+
+    // Label corners
+    const labels = ['TL', 'TR', 'BR', 'BL'];
+    const fontSize = Math.max(14, sourceImage.width / 50);
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.fillStyle = gridFound ? '#00ff00' : '#ff6600';
+    for (let i = 0; i < 4; i++) {
+      ctx.fillText(labels[i], quadCorners[i][0] + 8, quadCorners[i][1] - 8);
+    }
+  }, [scanResult]);
+
   const handleCapture = useCallback(async () => {
     const video = videoRef.current;
     if (!video || scanning) return;
@@ -66,13 +115,64 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
 
     try {
       const imageData = captureFrame(video);
-      const values = await recognizeGrid(imageData, (pct) => setProgress(pct));
-      onCapture(values);
+      const result = await recognizeGrid(imageData, (pct) => setProgress(pct));
+      setScanResult(result);
+      setScanning(false);
     } catch {
       setError('Recognition failed. Please try again.');
       setScanning(false);
     }
-  }, [onCapture, scanning]);
+  }, [scanning]);
+
+  const handleAccept = useCallback(() => {
+    if (scanResult) {
+      onCapture(scanResult.values);
+    }
+  }, [scanResult, onCapture]);
+
+  const handleRetry = useCallback(() => {
+    setScanResult(null);
+  }, []);
+
+  // Preview/confirmation screen
+  if (scanResult) {
+    return (
+      <div className="camera-container">
+        <div className="scan-preview">
+          <div className="scan-preview-header">
+            <h2>Scan Result</h2>
+            <span className={`scan-status ${scanResult.gridFound ? 'status-ok' : 'status-warn'}`}>
+              {scanResult.gridFound ? 'Grid detected' : 'Grid not found — used fallback'}
+            </span>
+          </div>
+
+          <div className="scan-preview-body">
+            {/* Captured image with quad overlay */}
+            <div className="scan-preview-image">
+              <canvas ref={previewCanvasRef} />
+            </div>
+
+            {/* Recognized values grid */}
+            <div className="scan-preview-grid">
+              <p className="scan-preview-label">Recognized values:</p>
+              <div className="scan-grid">
+                {scanResult.values.flat().map((cell, i) => (
+                  <div key={i} className="scan-grid-cell">
+                    {cellLabel(cell)}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="scan-preview-actions">
+            <button className="btn-secondary" onClick={handleRetry}>Retry</button>
+            <button className="btn-primary" onClick={handleAccept}>Accept</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="camera-container">
