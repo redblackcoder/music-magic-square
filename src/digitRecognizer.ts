@@ -55,8 +55,13 @@ export async function createCellRecognizer(
   modelPath: string,
   labels: string[] = CLASS_LABELS,
 ): Promise<CellRecognizer> {
+  console.log('[onnx] creating cell recognizer, model:', modelPath, 'labels:', labels.length, 'classes');
+  const t0 = performance.now();
   const ort = await getOrt();
+  console.log('[onnx] ort loaded in', Math.round(performance.now() - t0), 'ms');
   const session = await ort.InferenceSession.create(modelPath);
+  console.log('[onnx] session created in', Math.round(performance.now() - t0), 'ms');
+  console.log('[onnx] inputNames:', session.inputNames, 'outputNames:', session.outputNames);
 
   return {
     async recognize(pixels: Float32Array) {
@@ -74,11 +79,19 @@ export async function createCellRecognizer(
       const confidence = probs[classIndex];
       const label = labels[classIndex] ?? String(classIndex);
 
+      // Log top-3 predictions for debugging
+      const top3 = probs
+        .map((p, i) => ({ label: labels[i] ?? String(i), prob: p }))
+        .sort((a, b) => b.prob - a.prob)
+        .slice(0, 3);
+      console.log(`[onnx] top3: ${top3.map(t => `"${t.label}"=${t.prob.toFixed(3)}`).join(', ')}`);
+
       return { label, classIndex, confidence };
     },
 
     async dispose() {
       await session.release();
+      console.log('[onnx] session disposed');
     },
   };
 }

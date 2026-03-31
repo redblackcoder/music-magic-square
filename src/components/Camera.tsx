@@ -110,15 +110,27 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
     const video = videoRef.current;
     if (!video || scanning) return;
 
+    console.log('[camera] capture button pressed');
+    console.log('[camera] video dimensions:', video.videoWidth, '×', video.videoHeight);
     setScanning(true);
     setProgress(0);
 
     try {
+      console.log('[camera] capturing frame...');
       const imageData = captureFrame(video);
+      console.log('[camera] frame captured:', imageData.width, '×', imageData.height,
+        'data length:', imageData.data.length);
+
+      console.log('[camera] starting recognizeGrid...');
       const result = await recognizeGrid(imageData, (pct) => setProgress(pct));
+      console.log('[camera] scan complete — gridFound:', result.gridFound);
+      console.log('[camera] recognized values:', JSON.stringify(result.values.map(row =>
+        row.map(v => v.kind === 'single' ? v.dur : `${v.first}+${v.second}`)
+      )));
       setScanResult(result);
       setScanning(false);
-    } catch {
+    } catch (err) {
+      console.error('[camera] recognition failed:', err);
       setError('Recognition failed. Please try again.');
       setScanning(false);
     }

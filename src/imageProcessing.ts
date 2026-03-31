@@ -168,8 +168,17 @@ export async function recognizeCellFromImageData(
 
   const { label, confidence } = await recognizer.recognize(pixels);
 
-  if (confidence < 0.5) return DEFAULT_CELL;
-  return labelToCellValue(label) ?? DEFAULT_CELL;
+  if (confidence < 0.5) {
+    console.log(`[ocr] low confidence: label="${label}" conf=${confidence.toFixed(3)} → using default`);
+    return DEFAULT_CELL;
+  }
+  const parsed = labelToCellValue(label);
+  if (!parsed) {
+    console.log(`[ocr] invalid label: "${label}" conf=${confidence.toFixed(3)} → using default`);
+  } else {
+    console.log(`[ocr] recognized: "${label}" conf=${confidence.toFixed(3)}`);
+  }
+  return parsed ?? DEFAULT_CELL;
 }
 
 /**
@@ -183,8 +192,15 @@ export async function recognizeGrid(
   imageData: ImageData,
   onProgress?: (pct: number) => void,
 ): Promise<ScanResult> {
+  const t0 = performance.now();
+  console.log('[scan] recognizeGrid called, image:', imageData.width, '×', imageData.height);
+
   // Detect grid with OpenCV (perspective-corrected)
+  console.log('[scan] step 1: detecting grid with OpenCV...');
   const { warped, cells, quadCorners } = await detectGrid(imageData);
+  console.log('[scan] grid detection done in', Math.round(performance.now() - t0), 'ms');
+  console.log('[scan] warped image:', warped.width, '×', warped.height, ', cells:', cells.length);
+  console.log('[scan] quadCorners:', JSON.stringify(quadCorners));
 
   // Check if a real quad was found (corners form a non-trivial quadrilateral)
   // The fallback produces an axis-aligned rectangle from bounding box
@@ -195,28 +211,52 @@ export async function recognizeGrid(
     Math.abs(tl[0] - bl[0]) < 2 &&
     Math.abs(tr[0] - br[0]) < 2;
   const gridFound = !isAxisAligned;
+  console.log('[scan] gridFound:', gridFound, '(isAxisAligned:', isAxisAligned, ')');
 
   // Try 65-class model first, fall back to MNIST
   let recognizer: CellRecognizer;
+  let modelUsed: string;
+  console.log('[scan] step 2: loading ONNX model...');
+  const tModel = performance.now();
   try {
     const modelPath = new URL('/cell-recognizer.onnx', window.location.origin).href;
+    console.log('[scan] trying 65-class model:', modelPath);
     recognizer = await createCellRecognizer(modelPath);
-  } catch {
+    modelUsed = 'cell-recognizer (65-class)';
+  } catch (e) {
+    console.warn('[scan] 65-class model failed, falling back to MNIST:', e);
     const modelPath = new URL('/mnist-12.onnx', window.location.origin).href;
+    console.log('[scan] loading MNIST model:', modelPath);
     recognizer = await createCellRecognizer(modelPath, ['0','1','2','3','4','5','6','7','8','9']);
+    modelUsed = 'mnist (10-class)';
   }
+  console.log('[scan] model loaded in', Math.round(performance.now() - tModel), 'ms — using:', modelUsed);
 
   const values: CellValue[][] = [[], [], [], []];
 
   try {
+    console.log('[scan] step 3: recognizing 16 cells...');
     for (let i = 0; i < cells.length; i++) {
-      const { x, y, w, h, row } = cells[i];
+      const { x, y, w, h, row, col } = cells[i];
       const cell = await recognizeCellFromImageData(recognizer, warped, x, y, w, h);
+      const label = cell.kind === 'single' ? cell.dur : `${cell.first}+${cell.second}`;
+      console.log(`[scan] cell[${row},${col}] (${x},${y} ${w}×${h}) → ${label}`);
       values[row].push(cell);
       onProgress?.((i + 1) / 16);
     }
   } finally {
     await recognizer.dispose();
+  }
+
+  const elapsed = Math.round(performance.now() - t0);
+  console.log('[scan] recognizeGrid complete in', elapsed, 'ms');
+  console.log('[scan] result grid:');
+  for (let r = 0; r < 4; r++) {
+    const row = values[r].map(v => {
+      if (v.kind === 'single') return v.dur;
+      return `${v.first}+${v.second}`;
+    });
+    console.log(`[scan]   row ${r}: [${row.join(', ')}]`);
   }
 
   return {
