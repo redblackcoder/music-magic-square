@@ -1,6 +1,13 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import { captureFrame, type ScanResult } from '../imageProcessing';
+import {
+  captureFrame,
+  loadRecognizer,
+  recognizeCellFromImageData,
+  type ScanResult,
+} from '../imageProcessing';
 import type { CellValue, NoteDuration } from '../types';
+import type { CellRecognizer } from '../digitRecognizer';
+import type { CellBounds } from '../gridDetection';
 
 interface CameraProps {
   onCapture: (values: CellValue[][]) => void;
@@ -20,6 +27,17 @@ function cellLabel(v: CellValue): string {
   return `${DUR_TO_NUM[v.first] ?? '?'}+${DUR_TO_NUM[v.second] ?? '?'}`;
 }
 
+/** Check if quad corners are axis-aligned (fallback detection, not a real quad) */
+function isGridFound(quadCorners: [number, number][]): boolean {
+  const [tl, tr, br, bl] = quadCorners;
+  const isAxisAligned =
+    Math.abs(tl[1] - tr[1]) < 2 &&
+    Math.abs(bl[1] - br[1]) < 2 &&
+    Math.abs(tl[0] - bl[0]) < 2 &&
+    Math.abs(tr[0] - br[0]) < 2;
+  return !isAxisAligned;
+}
+
 const GHOST_NUMBERS = [
   ['8', '4', '1', '2+1'],
   ['1', '2+1', '8', '4'],
@@ -31,50 +49,54 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const workerRef = useRef<Worker | null>(null);
+  const recognizerRef = useRef<CellRecognizer | null>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [scanStage, setScanStage] = useState('');
   const [progress, setProgress] = useState(0);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
-  const [workerReady, setWorkerReady] = useState(false);
 
-  // Create worker on mount — it pre-loads OpenCV + ONNX in the background
+  // Ref to hold the captured imageData while worker processes it
+  const capturedImageRef = useRef<ImageData | null>(null);
+
+  // Create worker (OpenCV) on mount and pre-load ONNX model on main thread
   useEffect(() => {
-    console.log('[camera] creating scan worker...');
+    console.log('[camera] creating scan worker for OpenCV...');
     const worker = new Worker(
       new URL('../scan.worker.ts', import.meta.url),
       { type: 'module' },
     );
     workerRef.current = worker;
 
+    // Pre-load ONNX model on main thread (it's fast and works reliably here)
+    console.log('[camera] pre-loading ONNX model on main thread...');
+    loadRecognizer().then(r => {
+      recognizerRef.current = r;
+      console.log('[camera] ONNX model ready');
+    }).catch(err => {
+      console.error('[camera] ONNX pre-load failed:', err);
+    });
+
     worker.onmessage = (e: MessageEvent) => {
       const msg = e.data;
       switch (msg.type) {
         case 'ready':
-          console.log('[camera] worker ready (OpenCV + ONNX pre-loaded)');
-          setWorkerReady(true);
+          console.log('[camera] worker ready (OpenCV pre-loaded)');
           break;
-        case 'progress':
-          setProgress(msg.pct);
-          break;
-        case 'result':
-          console.log('[camera] scan complete — gridFound:', msg.gridFound);
-          console.log('[camera] recognized values:', JSON.stringify(msg.values.map((row: CellValue[]) =>
-            row.map(v => v.kind === 'single' ? v.dur : `${v.first}+${v.second}`)
-          )));
-          setScanResult({
-            values: msg.values,
-            gridFound: msg.gridFound,
-            quadCorners: msg.quadCorners,
-            warpedImage: msg.warpedImageData,
-            sourceImage: msg.sourceImageData,
-          });
-          setScanning(false);
+        case 'gridResult':
+          console.log('[camera] grid detection complete');
+          // Now run cell recognition on main thread
+          runCellRecognition(
+            msg.warpedImageData as ImageData,
+            msg.cells as CellBounds[],
+            msg.quadCorners as [number, number][],
+          );
           break;
         case 'error':
           console.error('[camera] worker error:', msg.message);
-          setError(`Recognition failed: ${msg.message}`);
+          setError(`Grid detection failed: ${msg.message}`);
           setScanning(false);
           break;
       }
@@ -90,7 +112,55 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
       console.log('[camera] terminating worker');
       worker.terminate();
       workerRef.current = null;
+      recognizerRef.current?.dispose();
+      recognizerRef.current = null;
     };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Run ONNX cell recognition on main thread after worker returns grid results
+  const runCellRecognition = useCallback(async (
+    warped: ImageData,
+    cells: CellBounds[],
+    quadCorners: [number, number][],
+  ) => {
+    setScanStage('Recognizing numbers...');
+    console.log('[camera] running cell recognition on main thread, cells:', cells.length);
+
+    try {
+      // Load recognizer if not pre-loaded yet
+      if (!recognizerRef.current) {
+        console.log('[camera] ONNX model not pre-loaded, loading now...');
+        recognizerRef.current = await loadRecognizer();
+      }
+
+      const recognizer = recognizerRef.current;
+      const values: CellValue[][] = [[], [], [], []];
+
+      for (let i = 0; i < cells.length; i++) {
+        const { x, y, w, h, row, col } = cells[i];
+        const cell = await recognizeCellFromImageData(recognizer, warped, x, y, w, h);
+        const label = cell.kind === 'single' ? cell.dur : `${cell.first}+${cell.second}`;
+        console.log(`[camera] cell[${row},${col}] → ${label}`);
+        values[row].push(cell);
+        setProgress((i + 1) / 16);
+      }
+
+      const gridFound = isGridFound(quadCorners);
+      console.log('[camera] scan complete — gridFound:', gridFound);
+
+      setScanResult({
+        values,
+        sourceImage: capturedImageRef.current!,
+        gridFound,
+        quadCorners,
+        warpedImage: warped,
+      });
+    } catch (err) {
+      console.error('[camera] cell recognition failed:', err);
+      setError('Number recognition failed. Please try again.');
+    } finally {
+      setScanning(false);
+    }
   }, []);
 
   // Start camera
@@ -170,15 +240,17 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
 
     console.log('[camera] capture button pressed');
     console.log('[camera] video dimensions:', video.videoWidth, '×', video.videoHeight);
-    console.log('[camera] worker pre-loaded:', workerReady);
     setScanning(true);
     setProgress(0);
+    setScanStage('Detecting grid...');
 
     const imageData = captureFrame(video);
+    capturedImageRef.current = imageData;
     console.log('[camera] frame captured:', imageData.width, '×', imageData.height);
 
+    // Send to worker for grid detection (OpenCV)
     worker.postMessage({ type: 'scan', imageData });
-  }, [scanning, workerReady]);
+  }, [scanning]);
 
   const handleAccept = useCallback(() => {
     if (scanResult) {
@@ -268,7 +340,7 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
           {scanning && (
             <div className="camera-loading">
               <div className="scan-progress">
-                <p>{workerReady ? 'Scanning numbers...' : 'Loading scanner...'}</p>
+                <p>{scanStage}</p>
                 <div className="progress-bar">
                   <div className="progress-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
                 </div>
