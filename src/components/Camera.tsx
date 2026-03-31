@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import { captureFrame, recognizeGrid, type ScanResult } from '../imageProcessing';
+import { captureFrame, type ScanResult } from '../imageProcessing';
 import type { CellValue, NoteDuration } from '../types';
 
 interface CameraProps {
@@ -30,13 +30,70 @@ const GHOST_NUMBERS = [
 export default function Camera({ onCapture, onClose }: CameraProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const workerRef = useRef<Worker | null>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState(0);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+  const [workerReady, setWorkerReady] = useState(false);
 
+  // Create worker on mount — it pre-loads OpenCV + ONNX in the background
+  useEffect(() => {
+    console.log('[camera] creating scan worker...');
+    const worker = new Worker(
+      new URL('../scan.worker.ts', import.meta.url),
+      { type: 'module' },
+    );
+    workerRef.current = worker;
+
+    worker.onmessage = (e: MessageEvent) => {
+      const msg = e.data;
+      switch (msg.type) {
+        case 'ready':
+          console.log('[camera] worker ready (OpenCV + ONNX pre-loaded)');
+          setWorkerReady(true);
+          break;
+        case 'progress':
+          setProgress(msg.pct);
+          break;
+        case 'result':
+          console.log('[camera] scan complete — gridFound:', msg.gridFound);
+          console.log('[camera] recognized values:', JSON.stringify(msg.values.map((row: CellValue[]) =>
+            row.map(v => v.kind === 'single' ? v.dur : `${v.first}+${v.second}`)
+          )));
+          setScanResult({
+            values: msg.values,
+            gridFound: msg.gridFound,
+            quadCorners: msg.quadCorners,
+            warpedImage: msg.warpedImageData,
+            sourceImage: msg.sourceImageData,
+          });
+          setScanning(false);
+          break;
+        case 'error':
+          console.error('[camera] worker error:', msg.message);
+          setError(`Recognition failed: ${msg.message}`);
+          setScanning(false);
+          break;
+      }
+    };
+
+    worker.onerror = (e) => {
+      console.error('[camera] worker error event:', e);
+      setError('Scanner failed to initialize. Please try again.');
+      setScanning(false);
+    };
+
+    return () => {
+      console.log('[camera] terminating worker');
+      worker.terminate();
+      workerRef.current = null;
+    };
+  }, []);
+
+  // Start camera
   useEffect(() => {
     let cancelled = false;
 
@@ -106,35 +163,22 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
     }
   }, [scanResult]);
 
-  const handleCapture = useCallback(async () => {
+  const handleCapture = useCallback(() => {
     const video = videoRef.current;
-    if (!video || scanning) return;
+    const worker = workerRef.current;
+    if (!video || !worker || scanning) return;
 
     console.log('[camera] capture button pressed');
     console.log('[camera] video dimensions:', video.videoWidth, '×', video.videoHeight);
+    console.log('[camera] worker pre-loaded:', workerReady);
     setScanning(true);
     setProgress(0);
 
-    try {
-      console.log('[camera] capturing frame...');
-      const imageData = captureFrame(video);
-      console.log('[camera] frame captured:', imageData.width, '×', imageData.height,
-        'data length:', imageData.data.length);
+    const imageData = captureFrame(video);
+    console.log('[camera] frame captured:', imageData.width, '×', imageData.height);
 
-      console.log('[camera] starting recognizeGrid...');
-      const result = await recognizeGrid(imageData, (pct) => setProgress(pct));
-      console.log('[camera] scan complete — gridFound:', result.gridFound);
-      console.log('[camera] recognized values:', JSON.stringify(result.values.map(row =>
-        row.map(v => v.kind === 'single' ? v.dur : `${v.first}+${v.second}`)
-      )));
-      setScanResult(result);
-      setScanning(false);
-    } catch (err) {
-      console.error('[camera] recognition failed:', err);
-      setError('Recognition failed. Please try again.');
-      setScanning(false);
-    }
-  }, [scanning]);
+    worker.postMessage({ type: 'scan', imageData });
+  }, [scanning, workerReady]);
 
   const handleAccept = useCallback(() => {
     if (scanResult) {
@@ -224,7 +268,7 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
           {scanning && (
             <div className="camera-loading">
               <div className="scan-progress">
-                <p>Scanning numbers...</p>
+                <p>{workerReady ? 'Scanning numbers...' : 'Loading scanner...'}</p>
                 <div className="progress-bar">
                   <div className="progress-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
                 </div>

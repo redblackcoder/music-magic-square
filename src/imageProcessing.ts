@@ -182,15 +182,41 @@ export async function recognizeCellFromImageData(
 }
 
 /**
+ * Load the ONNX cell recognizer. Tries 65-class model first, falls back to MNIST.
+ * Uses `location.origin` which works in both main thread and Web Workers.
+ */
+export async function loadRecognizer(): Promise<CellRecognizer> {
+  const origin = typeof globalThis.location !== 'undefined' ? location.origin : '';
+  console.log('[scan] loading ONNX model...');
+  const t0 = performance.now();
+  try {
+    const modelPath = new URL('/cell-recognizer.onnx', origin).href;
+    console.log('[scan] trying 65-class model:', modelPath);
+    const r = await createCellRecognizer(modelPath);
+    console.log('[scan] 65-class model loaded in', Math.round(performance.now() - t0), 'ms');
+    return r;
+  } catch (e) {
+    console.warn('[scan] 65-class model failed, falling back to MNIST:', e);
+    const modelPath = new URL('/mnist-12.onnx', origin).href;
+    console.log('[scan] loading MNIST model:', modelPath);
+    const r = await createCellRecognizer(modelPath, ['0','1','2','3','4','5','6','7','8','9']);
+    console.log('[scan] MNIST model loaded in', Math.round(performance.now() - t0), 'ms');
+    return r;
+  }
+}
+
+/**
  * Recognize a 4x4 grid of hand-drawn numbers/sums.
  * Uses OpenCV for grid detection (edge detection + perspective transform),
  * then ONNX model for cell content recognition.
  *
  * Returns a ScanResult with diagnostic info for preview/confirmation.
+ * Pass a pre-loaded recognizer to skip model loading (used by the Web Worker).
  */
 export async function recognizeGrid(
   imageData: ImageData,
   onProgress?: (pct: number) => void,
+  preloadedRecognizer?: CellRecognizer,
 ): Promise<ScanResult> {
   const t0 = performance.now();
   console.log('[scan] recognizeGrid called, image:', imageData.width, '×', imageData.height);
@@ -213,29 +239,14 @@ export async function recognizeGrid(
   const gridFound = !isAxisAligned;
   console.log('[scan] gridFound:', gridFound, '(isAxisAligned:', isAxisAligned, ')');
 
-  // Try 65-class model first, fall back to MNIST
-  let recognizer: CellRecognizer;
-  let modelUsed: string;
-  console.log('[scan] step 2: loading ONNX model...');
-  const tModel = performance.now();
-  try {
-    const modelPath = new URL('/cell-recognizer.onnx', window.location.origin).href;
-    console.log('[scan] trying 65-class model:', modelPath);
-    recognizer = await createCellRecognizer(modelPath);
-    modelUsed = 'cell-recognizer (65-class)';
-  } catch (e) {
-    console.warn('[scan] 65-class model failed, falling back to MNIST:', e);
-    const modelPath = new URL('/mnist-12.onnx', window.location.origin).href;
-    console.log('[scan] loading MNIST model:', modelPath);
-    recognizer = await createCellRecognizer(modelPath, ['0','1','2','3','4','5','6','7','8','9']);
-    modelUsed = 'mnist (10-class)';
-  }
-  console.log('[scan] model loaded in', Math.round(performance.now() - tModel), 'ms — using:', modelUsed);
+  // Use pre-loaded recognizer or load one now
+  const ownRecognizer = !preloadedRecognizer;
+  const recognizer = preloadedRecognizer ?? await loadRecognizer();
 
   const values: CellValue[][] = [[], [], [], []];
 
   try {
-    console.log('[scan] step 3: recognizing 16 cells...');
+    console.log('[scan] step 2: recognizing 16 cells...');
     for (let i = 0; i < cells.length; i++) {
       const { x, y, w, h, row, col } = cells[i];
       const cell = await recognizeCellFromImageData(recognizer, warped, x, y, w, h);
@@ -245,7 +256,7 @@ export async function recognizeGrid(
       onProgress?.((i + 1) / 16);
     }
   } finally {
-    await recognizer.dispose();
+    if (ownRecognizer) await recognizer.dispose();
   }
 
   const elapsed = Math.round(performance.now() - t0);
