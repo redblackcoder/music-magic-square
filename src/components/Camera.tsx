@@ -56,32 +56,24 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [preloadDone, setPreloadDone] = useState(false);
 
-  // Pre-load OpenCV + ONNX model eagerly on mount (while user frames the shot)
+  // Pre-load ONNX + OpenCV in background (fire-and-forget, doesn't block camera)
   useEffect(() => {
     let cancelled = false;
 
-    // Use setTimeout so the camera UI renders first
-    setTimeout(async () => {
-      if (cancelled) return;
-      console.log('[camera] pre-loading OpenCV + ONNX...');
-      const t0 = performance.now();
-
-      try {
-        // Load both in parallel
-        const [, recognizer] = await Promise.all([
-          initOpenCV().then(() => console.log('[camera] OpenCV ready')),
-          loadRecognizer().then(r => { console.log('[camera] ONNX model ready'); return r; }),
-        ]);
-        if (!cancelled) {
-          recognizerRef.current = recognizer;
-          setPreloadDone(true);
-          console.log('[camera] pre-load complete in', Math.round(performance.now() - t0), 'ms');
-        }
-      } catch (err) {
-        console.error('[camera] pre-load failed:', err);
-        // Not fatal — will load on demand during scan
+    console.log('[camera] pre-loading ONNX + OpenCV...');
+    loadRecognizer().then(r => {
+      if (!cancelled) {
+        recognizerRef.current = r;
+        console.log('[camera] ONNX model ready');
       }
-    }, 100);
+    }).catch(err => console.error('[camera] ONNX pre-load failed:', err));
+
+    initOpenCV().then(() => {
+      if (!cancelled) {
+        setPreloadDone(true);
+        console.log('[camera] OpenCV ready');
+      }
+    }).catch(err => console.error('[camera] OpenCV pre-load failed:', err));
 
     return () => {
       cancelled = true;
@@ -90,15 +82,17 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
     };
   }, []);
 
-  // Start camera
+  // Start camera, then pre-load OpenCV once camera is running
   useEffect(() => {
     let cancelled = false;
 
     async function startCamera() {
+      console.log('[camera] requesting camera access...');
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
         });
+        console.log('[camera] got stream, tracks:', stream.getTracks().length);
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
           return;
@@ -107,11 +101,13 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           videoRef.current.onloadedmetadata = () => {
+            console.log('[camera] video ready:', videoRef.current?.videoWidth, '×', videoRef.current?.videoHeight);
             videoRef.current?.play();
             setReady(true);
           };
         }
-      } catch {
+      } catch (err) {
+        console.error('[camera] getUserMedia failed:', err);
         if (!cancelled) {
           setError('Camera access denied. Please allow camera permission and try again.');
         }
