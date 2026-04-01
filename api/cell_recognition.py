@@ -56,7 +56,7 @@ def _get_mnist():
     opts.intra_op_num_threads = 1
     opts.inter_op_num_threads = 1
 
-    path = os.path.join(_project_root, "public", "mnist-12.onnx")
+    path = os.path.join(_project_root, "models", "mnist-12.onnx")
     _mnist_session = ort.InferenceSession(path, opts)
     print(f"[mnist] loaded: {path}")
     return _mnist_session

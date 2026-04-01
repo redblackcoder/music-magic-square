@@ -2,7 +2,7 @@
   "functions": {
     "api/scan.py": {
       "maxDuration": 10,
-      "includeFiles": "{public/mnist-12.onnx,models/mfr/encoder_model.onnx,models/mfr/decoder_model.onnx,models/mfr/tokenizer.json}"
+      "includeFiles": "models/**"
     }
   }
 }
