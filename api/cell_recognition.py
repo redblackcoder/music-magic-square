@@ -11,6 +11,9 @@ Pass 2: pix2text MFR model (384x384 RGB, LaTeX output).
 """
 
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(__file__))
 
 import numpy as np
 import cv2

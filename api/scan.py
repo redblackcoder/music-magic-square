@@ -8,6 +8,10 @@ math expression using the MFR model, and returns CellValue JSON.
 from http.server import BaseHTTPRequestHandler
 import json
 import base64
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(__file__))
 
 import numpy as np
 import cv2
