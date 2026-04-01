@@ -282,6 +282,7 @@ export async function recognizeGrid(
 
   return {
     values,
+    confidences: values.map(row => row.map(() => ({ confidence: 1.0, source: 'mnist' as const }))),
     sourceImage: imageData,
     gridFound,
     quadCorners,
