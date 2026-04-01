@@ -87,7 +87,7 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
     async function startCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+          video: { facingMode: 'environment' },
         });
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
