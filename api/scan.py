@@ -71,7 +71,7 @@ class handler(BaseHTTPRequestHandler):
                 diag[check_dir] = "NOT FOUND"
         # Also check specific files
         files_to_check = [
-            os.path.join(task_root, "public", "mnist-12.onnx"),
+            os.path.join(task_root, "models", "mnist-12.onnx"),
             os.path.join(task_root, "models", "mfr", "encoder_model.onnx"),
             os.path.join(task_root, "models", "mfr", "decoder_model.onnx"),
             os.path.join(task_root, "models", "mfr", "tokenizer.json"),

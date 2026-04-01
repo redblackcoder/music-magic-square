@@ -153,6 +153,33 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
     );
   }, [scanResult]);
 
+  /** Send a base64 JPEG + sourceImage to the scan API and set the result. */
+  const sendToScanApi = useCallback(async (base64: string, sourceImage: ImageData) => {
+    setScanStage('Processing...');
+
+    const response = await fetch('/api/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: base64 }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+      throw new Error(err.error || `Server error ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    setScanResult({
+      values: result.values,
+      confidences: result.confidences,
+      sourceImage,
+      gridFound: result.gridFound,
+      quadCorners: result.quadCorners,
+      warpedImage: sourceImage,
+    });
+  }, []);
+
   const handleCapture = useCallback(async () => {
     const video = videoRef.current;
     if (!video || scanning) return;
@@ -161,7 +188,6 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
     setScanStage('Sending to server...');
 
     try {
-      // Capture frame as JPEG
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
@@ -172,35 +198,56 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
       const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
       const base64 = dataUrl.split(',')[1];
 
-      setScanStage('Processing...');
-
-      const response = await fetch('/api/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: base64 }),
-      });
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
-        throw new Error(err.error || `Server error ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      setScanResult({
-        values: result.values,
-        confidences: result.confidences,
-        sourceImage,
-        gridFound: result.gridFound,
-        quadCorners: result.quadCorners,
-        warpedImage: sourceImage, // placeholder — warped image stays server-side
-      });
+      await sendToScanApi(base64, sourceImage);
     } catch (err) {
       setError(`Scan failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setScanning(false);
     }
-  }, [scanning]);
+  }, [scanning, sendToScanApi]);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || scanning) return;
+
+    setScanning(true);
+    setScanStage('Reading image...');
+
+    try {
+      // Read file as base64
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const base64 = dataUrl.split(',')[1];
+
+      // Also create ImageData for preview
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = reject;
+        img.src = dataUrl;
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+      const sourceImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+      await sendToScanApi(base64, sourceImage);
+    } catch (err) {
+      setError(`Scan failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setScanning(false);
+      // Reset file input so the same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }, [scanning, sendToScanApi]);
 
   // Check if all edited cells are valid
   const allValid = editedTexts.length === 4 && editedTexts.every(
@@ -343,7 +390,16 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
             <button className="btn-capture" onClick={handleCapture} disabled={!ready || scanning}>
               <span className="capture-icon" />
             </button>
-            <div style={{ width: 64 }} />
+            <button className="btn-secondary" onClick={() => fileInputRef.current?.click()} disabled={scanning}>
+              Upload
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={handleUpload}
+            />
           </div>
 
           {!ready && <div className="camera-loading">Starting camera...</div>}
