@@ -79,6 +79,8 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
   const [editingCell, setEditingCell] = useState<[number, number] | null>(null);
   // Track which cells have been manually edited (removes orange highlight)
   const [editedCells, setEditedCells] = useState<Set<string>>(new Set());
+  // Store captured image base64 for debug download
+  const [capturedBase64, setCapturedBase64] = useState<string | null>(null);
 
   // Start camera
   useEffect(() => {
@@ -128,6 +130,7 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
   /** Send a base64 JPEG + sourceImage to the scan API and set the result. */
   const sendToScanApi = useCallback(async (base64: string, sourceImage: ImageData) => {
     setScanStage('Processing...');
+    setCapturedBase64(base64);
 
     const response = await fetch('/api/scan', {
       method: 'POST',
@@ -285,7 +288,16 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
     setEditedTexts([]);
     setEditingCell(null);
     setEditedCells(new Set());
+    setCapturedBase64(null);
   }, []);
+
+  const handleDownloadImage = useCallback(() => {
+    if (!capturedBase64) return;
+    const link = document.createElement('a');
+    link.href = `data:image/jpeg;base64,${capturedBase64}`;
+    link.download = `scan_${Date.now()}.jpg`;
+    link.click();
+  }, [capturedBase64]);
 
   const handleCellClick = useCallback((r: number, c: number) => {
     setEditingCell([r, c]);
@@ -373,6 +385,9 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
 
           <div className="scan-preview-actions">
             <button className="btn-secondary" onClick={handleRetry}>Retry</button>
+            {import.meta.env.VITE_DEBUG_MODE === 'true' && (
+              <button className="btn-secondary" onClick={handleDownloadImage}>Save Image</button>
+            )}
             <button className="btn-primary" onClick={handleAccept} disabled={!allValid}>Accept</button>
           </div>
         </div>
