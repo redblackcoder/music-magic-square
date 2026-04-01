@@ -26,7 +26,7 @@ def latex_to_cell_value(latex: str) -> dict:
     We strip all LaTeX markup and try to extract numbers and + operators.
     """
     # Normalize common MFR misreadings of "+" before stripping
-    normalized = latex.replace("\\div", "+").replace("\\times", "+")
+    normalized = latex.replace("\\div", "+").replace("\\times", "+").replace("\\neq", "+")
     # Strip LaTeX commands (e.g. \frac, \mathrm, \quad), braces, $, spaces
     clean = re.sub(r"\\[a-zA-Z]+", "", normalized)
     clean = clean.replace("{", "").replace("}", "").replace("$", "")

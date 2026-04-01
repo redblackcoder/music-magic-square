@@ -227,10 +227,28 @@ def _prepare_mfr_input(gray_cell):
     return pixels.transpose(2, 0, 1)  # HWC → CHW
 
 
+# Token IDs the decoder is allowed to produce (digits, +, space variants, EOS)
+ALLOWED_TOKEN_IDS = [
+    EOS_TOKEN_ID,  # 2 — end of sequence
+    15,            # +
+    20, 21, 22, 23, 24, 25, 26, 27, 28, 29,  # 0-9
+    225,           # Ġ (space)
+    268, 269, 274, 279, 312, 333, 431, 450, 474, 510, 516,  # Ġ1, Ġ2, Ġ+, Ġ0, Ġ3-Ġ9
+    1772,          # ĠĠ (double space)
+]
+
+
 def _greedy_decode(encoder_out, decoder, batch_size):
-    """Greedy autoregressive decoding, batched across all cells."""
+    """Greedy autoregressive decoding with constrained vocabulary.
+
+    Only allows digit and '+' tokens — prevents MFR from hallucinating
+    LaTeX commands like \\hookleftarrow or \\neq for simple cell content.
+    """
     input_ids = np.full((batch_size, 1), DECODER_START_TOKEN_ID, dtype=np.int64)
     finished = np.zeros(batch_size, dtype=bool)
+
+    # Build mask: -inf for disallowed tokens
+    vocab_size = None
 
     for _ in range(MAX_NEW_TOKENS):
         logits = decoder.run(
@@ -238,7 +256,15 @@ def _greedy_decode(encoder_out, decoder, batch_size):
             {"input_ids": input_ids, "encoder_hidden_states": encoder_out},
         )[0]
 
-        next_tokens = logits[:, -1, :].argmax(axis=-1).astype(np.int64)
+        # Apply vocabulary constraint
+        if vocab_size is None:
+            vocab_size = logits.shape[-1]
+        last_logits = logits[:, -1, :]  # (batch, vocab)
+        mask = np.full(vocab_size, -1e9, dtype=np.float32)
+        mask[ALLOWED_TOKEN_IDS] = 0.0
+        last_logits = last_logits + mask
+
+        next_tokens = last_logits.argmax(axis=-1).astype(np.int64)
         finished |= next_tokens == EOS_TOKEN_ID
         input_ids = np.concatenate([input_ids, next_tokens[:, None]], axis=1)
 

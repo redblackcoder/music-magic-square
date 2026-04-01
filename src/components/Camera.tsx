@@ -64,7 +64,6 @@ const GHOST_NUMBERS = [
 export default function Camera({ onCapture, onClose }: CameraProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -112,38 +111,6 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
       streamRef.current?.getTracks().forEach((t) => t.stop());
     };
   }, []);
-
-  // Draw preview overlay when scan result arrives
-  useEffect(() => {
-    if (!scanResult || !previewCanvasRef.current) return;
-
-    const canvas = previewCanvasRef.current;
-    const { sourceImage, quadCorners, gridFound } = scanResult;
-    canvas.width = sourceImage.width;
-    canvas.height = sourceImage.height;
-
-    const ctx = canvas.getContext('2d')!;
-    ctx.putImageData(sourceImage, 0, 0);
-
-    const [tl, tr, br, bl] = quadCorners;
-    ctx.strokeStyle = gridFound ? '#00ff00' : '#ff6600';
-    ctx.lineWidth = Math.max(3, sourceImage.width / 300);
-    ctx.beginPath();
-    ctx.moveTo(tl[0], tl[1]);
-    ctx.lineTo(tr[0], tr[1]);
-    ctx.lineTo(br[0], br[1]);
-    ctx.lineTo(bl[0], bl[1]);
-    ctx.closePath();
-    ctx.stroke();
-
-    const labels = ['TL', 'TR', 'BR', 'BL'];
-    const fontSize = Math.max(14, sourceImage.width / 50);
-    ctx.font = `bold ${fontSize}px sans-serif`;
-    ctx.fillStyle = gridFound ? '#00ff00' : '#ff6600';
-    for (let i = 0; i < 4; i++) {
-      ctx.fillText(labels[i], quadCorners[i][0] + 8, quadCorners[i][1] - 8);
-    }
-  }, [scanResult]);
 
   // Initialize editable texts from scan result
   useEffect(() => {
@@ -303,10 +270,6 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
           </div>
 
           <div className="scan-preview-body">
-            <div className="scan-preview-image">
-              <canvas ref={previewCanvasRef} />
-            </div>
-
             <div className="scan-preview-grid">
               <p className="scan-preview-label">Recognized values:</p>
               <div className="scan-grid">
@@ -332,7 +295,7 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
                         {isEditing ? (
                           <input
                             type="text"
-                            inputMode="numeric"
+                            inputMode="tel"
                             autoFocus
                             value={text}
                             onChange={(e) => handleCellChange(r, c, e.target.value)}

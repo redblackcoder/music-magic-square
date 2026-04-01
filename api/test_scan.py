@@ -50,6 +50,7 @@ EXPECTED = {
     "IMG_8772.jpeg": GRID_W2,
     "IMG_8773.jpeg": GRID_W2,
     "IMG_8774.jpeg": GRID_W1,
+    "prod-scenario.jpg": GRID_W1,
 }
 
 
