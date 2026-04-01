@@ -1,3 +1,9 @@
 {
-  "installCommand": "npm ci"
+  "installCommand": "npm ci",
+  "functions": {
+    "api/scan.py": {
+      "maxDuration": 10,
+      "includeFiles": "public/{cell-recognizer.onnx,cell-recognizer.onnx.data,mnist-12.onnx},model-training/classes.json"
+    }
+  }
 }

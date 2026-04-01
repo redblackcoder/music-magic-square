@@ -46,3 +46,6 @@ eng.traineddata
 
 # test diagnose data
 tests/fixtures/grids/*.png
+
+# python
+*/__pycache__/*

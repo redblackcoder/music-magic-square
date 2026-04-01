@@ -1,13 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import {
-  captureFrame,
-  loadRecognizer,
-  recognizeCellFromImageData,
-  type ScanResult,
-} from '../imageProcessing';
-import { initOpenCV, detectGrid } from '../gridDetection';
 import type { CellValue, NoteDuration } from '../types';
-import type { CellRecognizer } from '../digitRecognizer';
+import type { ScanResult } from '../imageProcessing';
 
 interface CameraProps {
   onCapture: (values: CellValue[][]) => void;
@@ -26,16 +19,6 @@ function cellLabel(v: CellValue): string {
   return `${DUR_TO_NUM[v.first] ?? '?'}+${DUR_TO_NUM[v.second] ?? '?'}`;
 }
 
-function isGridFound(quadCorners: [number, number][]): boolean {
-  const [tl, tr, br, bl] = quadCorners;
-  return !(
-    Math.abs(tl[1] - tr[1]) < 2 &&
-    Math.abs(bl[1] - br[1]) < 2 &&
-    Math.abs(tl[0] - bl[0]) < 2 &&
-    Math.abs(tr[0] - br[0]) < 2
-  );
-}
-
 const GHOST_NUMBERS = [
   ['8', '4', '1', '2+1'],
   ['1', '2+1', '8', '4'],
@@ -46,98 +29,36 @@ const GHOST_NUMBERS = [
 export default function Camera({ onCapture, onClose }: CameraProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const recognizerRef = useRef<CellRecognizer | null>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanStage, setScanStage] = useState('');
-  const [progress, setProgress] = useState(0);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
-  const [preloadDone, setPreloadDone] = useState(false);
 
-  // Pre-load ONNX + OpenCV in background (fire-and-forget, doesn't block camera)
-  useEffect(() => {
-    let cancelled = false;
-
-    console.log('[camera] pre-loading ONNX + OpenCV...');
-    loadRecognizer().then(r => {
-      if (!cancelled) {
-        recognizerRef.current = r;
-        console.log('[camera] ONNX model ready');
-      }
-    }).catch(err => console.error('[camera] ONNX pre-load failed:', err));
-
-    initOpenCV().then(() => {
-      if (!cancelled) {
-        setPreloadDone(true);
-        console.log('[camera] OpenCV ready');
-      }
-    }).catch(err => console.error('[camera] OpenCV pre-load failed:', err));
-
-    return () => {
-      cancelled = true;
-      recognizerRef.current?.dispose();
-      recognizerRef.current = null;
-    };
-  }, []);
-
-  // Start camera, then pre-load OpenCV once camera is running
+  // Start camera
   useEffect(() => {
     let cancelled = false;
 
     async function startCamera() {
-      console.log('[camera] requesting camera access...');
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
         });
-        console.log('[camera] got stream, tracks:', stream.getTracks().length);
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
           return;
         }
         streamRef.current = stream;
-        const track = stream.getVideoTracks()[0];
-        console.log('[camera] track state:', track?.readyState, 'enabled:', track?.enabled, 'muted:', track?.muted);
-        console.log('[camera] track settings:', JSON.stringify(track?.getSettings()));
-
         const video = videoRef.current;
-        console.log('[camera] videoRef.current is:', video ? 'present' : 'NULL');
         if (video) {
-          // Listen to all relevant video events
-          for (const evt of ['loadstart', 'loadeddata', 'loadedmetadata', 'canplay', 'playing', 'error', 'stalled', 'suspend'] as const) {
-            video.addEventListener(evt, () => {
-              console.log(`[camera] video event: ${evt}, readyState: ${video.readyState}, videoWidth: ${video.videoWidth}`);
-            });
-          }
-
           video.onloadedmetadata = () => {
-            console.log('[camera] onloadedmetadata fired, videoWidth:', video.videoWidth, '×', video.videoHeight);
-            video.play().then(() => {
-              console.log('[camera] play() resolved');
-              setReady(true);
-            }).catch(err => {
-              console.error('[camera] play() rejected:', err);
-              setReady(true);
-            });
+            video.play();
+            setReady(true);
           };
           video.srcObject = stream;
-          console.log('[camera] srcObject assigned, readyState:', video.readyState);
-
-          // Fallback: if metadata doesn't fire within 3s, check state and force ready
-          setTimeout(() => {
-            console.log('[camera] 3s check — readyState:', video.readyState, 'videoWidth:', video.videoWidth, 'srcObject:', video.srcObject ? 'set' : 'NULL');
-            if (!ready && video.readyState >= 1) {
-              console.log('[camera] forcing ready from timeout (readyState >= 1)');
-              setReady(true);
-            }
-          }, 3000);
-        } else {
-          console.error('[camera] videoRef is null — cannot attach stream');
         }
-      } catch (err) {
-        console.error('[camera] getUserMedia failed:', err);
+      } catch {
         if (!cancelled) {
           setError('Camera access denied. Please allow camera permission and try again.');
         }
@@ -188,61 +109,49 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
     const video = videoRef.current;
     if (!video || scanning) return;
 
-    console.log('[camera] capture pressed, preloadDone:', preloadDone);
     setScanning(true);
-    setProgress(0);
-    setScanStage('Detecting grid...');
+    setScanStage('Sending to server...');
 
     try {
-      const imageData = captureFrame(video);
-      console.log('[camera] frame:', imageData.width, '×', imageData.height);
+      // Capture frame as JPEG
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(video, 0, 0);
+      const sourceImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-      // Yield to let the UI update before heavy processing
-      await new Promise(r => setTimeout(r, 50));
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      const base64 = dataUrl.split(',')[1];
 
-      // Step 1: Grid detection (OpenCV)
-      console.log('[camera] running grid detection...');
-      const { warped, cells, quadCorners } = await detectGrid(imageData);
-      const gridFound = isGridFound(quadCorners);
-      console.log('[camera] grid detected:', gridFound, 'cells:', cells.length);
+      setScanStage('Processing...');
 
-      // Yield again
-      setScanStage('Recognizing numbers...');
-      await new Promise(r => setTimeout(r, 0));
+      const response = await fetch('/api/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64 }),
+      });
 
-      // Step 2: Load recognizer if not pre-loaded
-      if (!recognizerRef.current) {
-        console.log('[camera] loading ONNX model on demand...');
-        recognizerRef.current = await loadRecognizer();
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+        throw new Error(err.error || `Server error ${response.status}`);
       }
 
-      // Step 3: Recognize 16 cells
-      const recognizer = recognizerRef.current;
-      const values: CellValue[][] = [[], [], [], []];
+      const result = await response.json();
 
-      for (let i = 0; i < cells.length; i++) {
-        const { x, y, w, h, row, col } = cells[i];
-        const cell = await recognizeCellFromImageData(recognizer, warped, x, y, w, h);
-        console.log(`[camera] cell[${row},${col}] → ${cellLabel(cell)}`);
-        values[row].push(cell);
-        setProgress((i + 1) / 16);
-      }
-
-      console.log('[camera] scan complete');
       setScanResult({
-        values,
-        sourceImage: imageData,
-        gridFound,
-        quadCorners,
-        warpedImage: warped,
+        values: result.values,
+        sourceImage,
+        gridFound: result.gridFound,
+        quadCorners: result.quadCorners,
+        warpedImage: sourceImage, // placeholder — warped image stays server-side
       });
     } catch (err) {
-      console.error('[camera] scan failed:', err);
       setError(`Scan failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setScanning(false);
     }
-  }, [scanning, preloadDone]);
+  }, [scanning]);
 
   const handleAccept = useCallback(() => {
     if (scanResult) onCapture(scanResult.values);
@@ -328,9 +237,6 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
             <div className="camera-loading">
               <div className="scan-progress">
                 <p>{scanStage}</p>
-                <div className="progress-bar">
-                  <div className="progress-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
-                </div>
               </div>
             </div>
           )}
