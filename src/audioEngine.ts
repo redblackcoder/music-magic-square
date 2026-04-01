@@ -52,15 +52,22 @@ export async function playBars(
       // getCellBeats returns fraction of a whole note; multiply by 4 for quarter-note beats
       const durationInQuarters = getCellBeats(cell.value) * 4;
       const time = `0:0:${beatOffset}`;
-      const note = midiToNote(cell.pitch);
-      const noteDur = `0:0:${durationInQuarters}`;
       const capturedBi = bi;
       const capturedNi = ni;
 
-      Tone.getTransport().schedule((t) => {
-        onNoteStart?.(capturedBi, capturedNi);
-        s.triggerAttackRelease(note, noteDur, t);
-      }, time);
+      if (cell.value.kind === 'rest') {
+        // Rest: advance time but don't produce sound
+        Tone.getTransport().schedule(() => {
+          onNoteStart?.(capturedBi, capturedNi);
+        }, time);
+      } else {
+        const note = midiToNote(cell.pitch);
+        const noteDur = `0:0:${durationInQuarters}`;
+        Tone.getTransport().schedule((t) => {
+          onNoteStart?.(capturedBi, capturedNi);
+          s.triggerAttackRelease(note, noteDur, t);
+        }, time);
+      }
 
       beatOffset += durationInQuarters;
     }

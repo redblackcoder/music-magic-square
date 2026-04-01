@@ -33,7 +33,7 @@ const VALID_PAIRS: Record<string, [string, string]> = {
 const LOW_CONFIDENCE = 0.80;
 
 function cellLabel(v: CellValue): string {
-  if (v.kind === 'single') return DUR_TO_NUM[v.dur] ?? '?';
+  if (v.kind === 'single' || v.kind === 'rest') return DUR_TO_NUM[v.dur] ?? '?';
   return `${DUR_TO_NUM[v.first] ?? '?'}+${DUR_TO_NUM[v.second] ?? '?'}`;
 }
 
@@ -74,6 +74,8 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
   const [editedTexts, setEditedTexts] = useState<string[][]>([]);
   // Track which cell is being edited (row, col) or null
   const [editingCell, setEditingCell] = useState<[number, number] | null>(null);
+  // Track which cells have been manually edited (removes orange highlight)
+  const [editedCells, setEditedCells] = useState<Set<string>>(new Set());
 
   // Start camera
   useEffect(() => {
@@ -233,6 +235,7 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
     setScanResult(null);
     setEditedTexts([]);
     setEditingCell(null);
+    setEditedCells(new Set());
   }, []);
 
   const handleCellClick = useCallback((r: number, c: number) => {
@@ -243,6 +246,11 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
     setEditedTexts((prev) => {
       const next = prev.map((row) => [...row]);
       next[r][c] = value;
+      return next;
+    });
+    setEditedCells((prev) => {
+      const next = new Set(prev);
+      next.add(`${r}-${c}`);
       return next;
     });
   }, []);
@@ -277,7 +285,7 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
                   row.map((text, c) => {
                     const conf = scanResult.confidences[r][c];
                     const valid = parseInput(text) !== null;
-                    const lowConf = isLowConfidence(conf);
+                    const lowConf = isLowConfidence(conf) && !editedCells.has(`${r}-${c}`);
                     const isEditing = editingCell?.[0] === r && editingCell?.[1] === c;
 
                     const classes = [

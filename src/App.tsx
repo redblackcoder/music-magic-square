@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import Camera from './components/Camera';
 import GridEditor from './components/GridEditor';
 import StaffDisplay from './components/StaffDisplay';
@@ -7,7 +7,7 @@ import QRShare from './components/QRShare';
 import { createDefaultGrid, extractBars, updateCellValue, validateMagicSquare } from './gridLogic';
 import { playBars, stopPlayback } from './audioEngine';
 import type { MusicGrid, CellValue } from './types';
-import { DEFAULT_PITCHES, DEFAULT_VALUES } from './types';
+import { DEFAULT_VALUES, MELODY_PRESETS } from './types';
 import './App.css';
 
 type View = 'main' | 'camera';
@@ -20,7 +20,21 @@ function App() {
   const [activeBar, setActiveBar] = useState(-1);
   const [activeNote, setActiveNote] = useState(-1);
   const [showQR, setShowQR] = useState(false);
+  const [melodyIndex, setMelodyIndex] = useState(0);
   const cancelRef = useRef<(() => void) | null>(null);
+  const melody = MELODY_PRESETS[melodyIndex];
+
+  // Update cell pitches when melody preset changes
+  useEffect(() => {
+    setGrid((g) =>
+      g.map((row, ri) =>
+        row.map((cell, ci) => ({
+          ...cell,
+          pitch: melody.pitches[ri][ci],
+        }))
+      )
+    );
+  }, [melody]);
 
   const bars = extractBars(grid);
   const validation = useMemo(() => validateMagicSquare(grid), [grid]);
@@ -36,12 +50,12 @@ function App() {
           row: ri,
           col: ci,
           value,
-          pitch: DEFAULT_PITCHES[ri][ci],
+          pitch: melody.pitches[ri][ci],
         }))
       )
     );
     setView('main');
-  }, []);
+  }, [melody]);
 
   const handlePlay = useCallback(async () => {
     if (!validation.valid) return;
@@ -78,8 +92,6 @@ function App() {
   }, []);
 
   const handleRandomize = useCallback(() => {
-    // Use the default magic square values shuffled to keep validity
-    // Simple approach: randomly permute rows and columns of DEFAULT_VALUES
     const rowPerm = [0, 1, 2, 3].sort(() => Math.random() - 0.5);
     const colPerm = [0, 1, 2, 3].sort(() => Math.random() - 0.5);
     setGrid(
@@ -88,11 +100,11 @@ function App() {
           row: ri,
           col: ci,
           value: DEFAULT_VALUES[rowPerm[ri]][colPerm[ci]],
-          pitch: DEFAULT_PITCHES[ri][ci],
+          pitch: melody.pitches[ri][ci],
         }))
       )
     );
-  }, []);
+  }, [melody]);
 
   if (view === 'camera') {
     return <Camera onCapture={handleCapture} onClose={() => setView('main')} />;
@@ -112,6 +124,19 @@ function App() {
         <button className="btn-secondary" onClick={handleRandomize}>
           Randomize
         </button>
+      </div>
+
+      <div className="melody-selector">
+        <label className="melody-label">Melody:</label>
+        <select
+          className="melody-select"
+          value={melodyIndex}
+          onChange={(e) => setMelodyIndex(Number(e.target.value))}
+        >
+          {MELODY_PRESETS.map((preset, i) => (
+            <option key={i} value={i}>{preset.name}</option>
+          ))}
+        </select>
       </div>
 
       <GridEditor

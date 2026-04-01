@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import { type Bar, type CellValue, DUR_SYMBOL, STAFF_POSITION, GCLEF_CHAR } from '../types';
+import { type Bar, type CellValue, DUR_SYMBOL, REST_SYMBOL, STAFF_POSITION, GCLEF_CHAR } from '../types';
 
 interface StaffDisplayProps {
   bars: Bar[];
@@ -62,6 +62,27 @@ function NoteOnStaff({ value, pitch, x, playing }: {
   const glyphDy = 0.35 * fontSize; // empirical offset for Bravura glyphs
 
   const lLines = ledgerLines(pos);
+
+  if (value.kind === 'rest') {
+    // Rests are centered on the middle staff line (position 4 = B4)
+    const restY = posToY(4);
+    const restSym = REST_SYMBOL[value.dur];
+    const restDy = 0.35 * fontSize;
+    return (
+      <g>
+        <text
+          x={x} y={restY + restDy}
+          fill={color}
+          fontFamily="Bravura, serif"
+          fontSize={restSym.size}
+          textAnchor="middle"
+          opacity={0.7}
+        >
+          {restSym.char}
+        </text>
+      </g>
+    );
+  }
 
   if (value.kind === 'single') {
     return (

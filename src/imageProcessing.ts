@@ -260,7 +260,7 @@ export async function recognizeGrid(
     for (let i = 0; i < cells.length; i++) {
       const { x, y, w, h, row, col } = cells[i];
       const cell = await recognizeCellFromImageData(recognizer, warped, x, y, w, h);
-      const label = cell.kind === 'single' ? cell.dur : `${cell.first}+${cell.second}`;
+      const label = cell.kind === 'tied' ? `${cell.first}+${cell.second}` : cell.dur;
       console.log(`[scan] cell[${row},${col}] (${x},${y} ${w}×${h}) → ${label}`);
       values[row].push(cell);
       onProgress?.((i + 1) / 16);
@@ -274,8 +274,8 @@ export async function recognizeGrid(
   console.log('[scan] result grid:');
   for (let r = 0; r < 4; r++) {
     const row = values[r].map(v => {
-      if (v.kind === 'single') return v.dur;
-      return `${v.first}+${v.second}`;
+      if (v.kind === 'tied') return `${v.first}+${v.second}`;
+      return v.dur;
     });
     console.log(`[scan]   row ${r}: [${row.join(', ')}]`);
   }
