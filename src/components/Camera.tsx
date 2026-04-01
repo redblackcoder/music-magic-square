@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import type { CellValue, NoteDuration } from '../types';
-import type { ScanResult } from '../imageProcessing';
+import type { ScanResult, CellConfidence } from '../imageProcessing';
 
 interface CameraProps {
   onCapture: (values: CellValue[][]) => void;
@@ -14,9 +14,44 @@ const DUR_TO_NUM: Record<NoteDuration, string> = {
   '1/2': '8',
 };
 
+const NUM_TO_DUR: Record<string, NoteDuration> = {
+  '1': '1/16',
+  '2': '1/8',
+  '4': '1/4',
+  '8': '1/2',
+};
+
+const VALID_SINGLES = new Set(['1', '2', '4', '8']);
+const VALID_PAIRS: Record<string, [string, string]> = {
+  '1+2': ['1', '2'], '1+4': ['1', '4'], '1+8': ['1', '8'],
+  '2+4': ['2', '4'], '2+8': ['2', '8'], '4+8': ['4', '8'],
+  '2+1': ['1', '2'], '4+1': ['1', '4'], '8+1': ['1', '8'],
+  '4+2': ['2', '4'], '8+2': ['2', '8'], '8+4': ['4', '8'],
+};
+
+/** Low confidence threshold — cells below this get highlighted */
+const LOW_CONFIDENCE = 0.80;
+
 function cellLabel(v: CellValue): string {
   if (v.kind === 'single') return DUR_TO_NUM[v.dur] ?? '?';
   return `${DUR_TO_NUM[v.first] ?? '?'}+${DUR_TO_NUM[v.second] ?? '?'}`;
+}
+
+/** Parse a text string like "4" or "1+2" into a CellValue, or null if invalid */
+function parseInput(text: string): CellValue | null {
+  const clean = text.replace(/\s/g, '');
+  if (VALID_SINGLES.has(clean) && NUM_TO_DUR[clean]) {
+    return { kind: 'single', dur: NUM_TO_DUR[clean] };
+  }
+  const pair = VALID_PAIRS[clean];
+  if (pair) {
+    return { kind: 'tied', first: NUM_TO_DUR[pair[0]], second: NUM_TO_DUR[pair[1]] };
+  }
+  return null;
+}
+
+function isLowConfidence(conf: CellConfidence): boolean {
+  return conf.confidence < LOW_CONFIDENCE || conf.source === 'default';
 }
 
 const GHOST_NUMBERS = [
@@ -35,6 +70,11 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
   const [scanning, setScanning] = useState(false);
   const [scanStage, setScanStage] = useState('');
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+
+  // Editable cell text values (digit strings like "4", "1+2")
+  const [editedTexts, setEditedTexts] = useState<string[][]>([]);
+  // Track which cell is being edited (row, col) or null
+  const [editingCell, setEditingCell] = useState<[number, number] | null>(null);
 
   // Start camera
   useEffect(() => {
@@ -105,6 +145,14 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
     }
   }, [scanResult]);
 
+  // Initialize editable texts from scan result
+  useEffect(() => {
+    if (!scanResult) return;
+    setEditedTexts(
+      scanResult.values.map((row) => row.map((cell) => cellLabel(cell)))
+    );
+  }, [scanResult]);
+
   const handleCapture = useCallback(async () => {
     const video = videoRef.current;
     if (!video || scanning) return;
@@ -141,6 +189,7 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
 
       setScanResult({
         values: result.values,
+        confidences: result.confidences,
         sourceImage,
         gridFound: result.gridFound,
         quadCorners: result.quadCorners,
@@ -153,16 +202,49 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
     }
   }, [scanning]);
 
+  // Check if all edited cells are valid
+  const allValid = editedTexts.length === 4 && editedTexts.every(
+    (row) => row.length === 4 && row.every((text) => parseInput(text) !== null)
+  );
+
   const handleAccept = useCallback(() => {
-    if (scanResult) onCapture(scanResult.values);
-  }, [scanResult, onCapture]);
+    if (!allValid) return;
+    const values = editedTexts.map((row) =>
+      row.map((text) => parseInput(text)!)
+    );
+    onCapture(values);
+  }, [editedTexts, allValid, onCapture]);
 
   const handleRetry = useCallback(() => {
     setScanResult(null);
+    setEditedTexts([]);
+    setEditingCell(null);
+  }, []);
+
+  const handleCellClick = useCallback((r: number, c: number) => {
+    setEditingCell([r, c]);
+  }, []);
+
+  const handleCellChange = useCallback((r: number, c: number, value: string) => {
+    setEditedTexts((prev) => {
+      const next = prev.map((row) => [...row]);
+      next[r][c] = value;
+      return next;
+    });
+  }, []);
+
+  const handleCellBlur = useCallback(() => {
+    setEditingCell(null);
+  }, []);
+
+  const handleCellKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      setEditingCell(null);
+    }
   }, []);
 
   // Preview/confirmation screen
-  if (scanResult) {
+  if (scanResult && editedTexts.length === 4) {
     return (
       <div className="camera-container">
         <div className="scan-preview">
@@ -181,18 +263,50 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
             <div className="scan-preview-grid">
               <p className="scan-preview-label">Recognized values:</p>
               <div className="scan-grid">
-                {scanResult.values.flat().map((cell, i) => (
-                  <div key={i} className="scan-grid-cell">
-                    {cellLabel(cell)}
-                  </div>
-                ))}
+                {editedTexts.flatMap((row, r) =>
+                  row.map((text, c) => {
+                    const conf = scanResult.confidences[r][c];
+                    const valid = parseInput(text) !== null;
+                    const lowConf = isLowConfidence(conf);
+                    const isEditing = editingCell?.[0] === r && editingCell?.[1] === c;
+
+                    const classes = [
+                      'scan-grid-cell',
+                      lowConf && !isEditing ? 'low-confidence' : '',
+                      !valid ? 'invalid' : '',
+                    ].filter(Boolean).join(' ');
+
+                    return (
+                      <div
+                        key={`${r}-${c}`}
+                        className={classes}
+                        onClick={() => handleCellClick(r, c)}
+                      >
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            autoFocus
+                            value={text}
+                            onChange={(e) => handleCellChange(r, c, e.target.value)}
+                            onBlur={handleCellBlur}
+                            onKeyDown={handleCellKeyDown}
+                          />
+                        ) : (
+                          text
+                        )}
+                      </div>
+                    );
+                  })
+                )}
               </div>
+              <p className="scan-grid-hint">Tap any cell to edit. Orange cells need review.</p>
             </div>
           </div>
 
           <div className="scan-preview-actions">
             <button className="btn-secondary" onClick={handleRetry}>Retry</button>
-            <button className="btn-primary" onClick={handleAccept}>Accept</button>
+            <button className="btn-primary" onClick={handleAccept} disabled={!allValid}>Accept</button>
           </div>
         </div>
       </div>

@@ -49,3 +49,6 @@ tests/fixtures/grids/*.png
 
 # python
 */__pycache__/*
+
+# MFR model files (downloaded at build time via vercel.json installCommand)
+models/

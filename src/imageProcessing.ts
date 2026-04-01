@@ -2,10 +2,20 @@ import { createCellRecognizer, prepareDigitInput, type CellRecognizer } from './
 import { detectGrid } from './gridDetection';
 import type { CellValue, NoteDuration } from './types';
 
+/** Confidence metadata for a single recognized cell */
+export interface CellConfidence {
+  /** 0.0–1.0 confidence score */
+  confidence: number;
+  /** Which recognition pass produced this result */
+  source: 'mnist' | 'mfr' | 'default';
+}
+
 /** Result of scanning a grid image, including diagnostics for preview */
 export interface ScanResult {
   /** Recognized cell values (4×4) */
   values: CellValue[][];
+  /** Per-cell confidence from the recognition pipeline (4×4) */
+  confidences: CellConfidence[][];
   /** The captured source image */
   sourceImage: ImageData;
   /** Whether a quadrilateral grid outline was found (vs fallback bounding box) */
