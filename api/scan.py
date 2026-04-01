@@ -10,6 +10,7 @@ import json
 import base64
 import os
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -39,6 +40,15 @@ class handler(BaseHTTPRequestHandler):
             if img is None:
                 self._error(400, "Failed to decode image")
                 return
+
+            # Save debug copy locally (only when running locally, not on Vercel)
+            debug_dir = os.path.join(os.path.dirname(__file__), "..", "temp")
+            if os.path.isdir(debug_dir):
+                ts = int(time.time())
+                debug_path = os.path.join(debug_dir, f"scan_{ts}.jpg")
+                with open(debug_path, "wb") as f:
+                    f.write(img_bytes)
+                print(f"[scan] saved debug image: {debug_path}")
 
             # Grid detection
             warped, cells, quad_corners, grid_found = detect_grid(img)

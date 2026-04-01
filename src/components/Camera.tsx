@@ -29,6 +29,9 @@ const VALID_PAIRS: Record<string, [string, string]> = {
   '4+2': ['2', '4'], '8+2': ['2', '8'], '8+4': ['4', '8'],
 };
 
+/** Guide overlay is 55% of the smaller viewport dimension (matches CSS 55vmin) */
+const GUIDE_FRACTION = 0.55;
+
 /** Low confidence threshold — cells below this get highlighted */
 const LOW_CONFIDENCE = 0.80;
 
@@ -157,12 +160,58 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
     setScanStage('Sending to server...');
 
     try {
+      // Calculate the guide overlay region in video pixel coordinates.
+      // The guide is GUIDE_FRACTION of the smaller viewport dimension, centered.
+      // The video uses object-fit: cover, so it may be cropped on one axis.
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      const dispW = video.clientWidth;
+      const dispH = video.clientHeight;
+
+      // object-fit: cover scaling
+      const videoAspect = vw / vh;
+      const dispAspect = dispW / dispH;
+      let srcX = 0, srcY = 0, srcW = vw, srcH = vh;
+      if (videoAspect > dispAspect) {
+        // Video is wider than display — cropped on sides
+        const visibleW = vh * dispAspect;
+        srcX = (vw - visibleW) / 2;
+        srcW = visibleW;
+      } else {
+        // Video is taller than display — cropped top/bottom
+        const visibleH = vw / dispAspect;
+        srcY = (vh - visibleH) / 2;
+        srcH = visibleH;
+      }
+
+      // Guide overlay is GUIDE_FRACTION of min(dispW, dispH), centered
+      const guidePx = GUIDE_FRACTION * Math.min(dispW, dispH);
+      const guideLeft = (dispW - guidePx) / 2;
+      const guideTop = (dispH - guidePx) / 2;
+
+      // Map guide rect from display coords to visible-video coords, then to full-video coords
+      const scaleX = srcW / dispW;
+      const scaleY = srcH / dispH;
+      const cropX = srcX + guideLeft * scaleX;
+      const cropY = srcY + guideTop * scaleY;
+      const cropW = guidePx * scaleX;
+      const cropH = guidePx * scaleY;
+
+      // Add some padding (10%) to give grid detection room
+      const pad = 0.10;
+      const padX = cropW * pad;
+      const padY = cropH * pad;
+      const finalX = Math.max(0, Math.round(cropX - padX));
+      const finalY = Math.max(0, Math.round(cropY - padY));
+      const finalW = Math.min(vw - finalX, Math.round(cropW + 2 * padX));
+      const finalH = Math.min(vh - finalY, Math.round(cropH + 2 * padY));
+
       const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      canvas.width = finalW;
+      canvas.height = finalH;
       const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(video, 0, 0);
-      const sourceImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(video, finalX, finalY, finalW, finalH, 0, 0, finalW, finalH);
+      const sourceImage = ctx.getImageData(0, 0, finalW, finalH);
 
       const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
       const base64 = dataUrl.split(',')[1];

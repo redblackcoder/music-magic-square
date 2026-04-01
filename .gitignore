@@ -53,3 +53,5 @@ tests/fixtures/grids/*.png
 
 # MFR model files (keep generation_config.json out of git — not needed at runtime)
 models/mfr/generation_config.json
+.vercel
+.env*.local

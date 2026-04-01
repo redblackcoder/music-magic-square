@@ -124,6 +124,9 @@
   overflow: hidden;
   padding: 6px 2px;
   min-height: 72px;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
 }
 
 .grid-cell:active {
@@ -395,33 +398,33 @@
   background: rgba(0, 0, 0, 0.45);
 }
 
-/* The grid is 70vmin square, centered */
+/* The grid is 55vmin square, centered */
 .guide-mask-top {
   top: 0;
   left: 0;
   right: 0;
-  height: calc(50% - 35vmin);
+  height: calc(50% - 27.5vmin);
 }
 
 .guide-mask-bottom {
   bottom: 0;
   left: 0;
   right: 0;
-  height: calc(50% - 35vmin);
+  height: calc(50% - 27.5vmin);
 }
 
 .guide-mask-left {
-  top: calc(50% - 35vmin);
+  top: calc(50% - 27.5vmin);
   left: 0;
-  width: calc(50% - 35vmin);
-  height: 70vmin;
+  width: calc(50% - 27.5vmin);
+  height: 55vmin;
 }
 
 .guide-mask-right {
-  top: calc(50% - 35vmin);
+  top: calc(50% - 27.5vmin);
   right: 0;
-  width: calc(50% - 35vmin);
-  height: 70vmin;
+  width: calc(50% - 27.5vmin);
+  height: 55vmin;
 }
 
 .guide-grid {
@@ -429,8 +432,8 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 70vmin;
-  height: 70vmin;
+  width: 55vmin;
+  height: 55vmin;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: repeat(4, 1fr);

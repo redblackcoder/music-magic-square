@@ -2,9 +2,11 @@ import { useRef, useCallback } from 'react';
 import {
   type MusicGrid,
   type CellValue,
+  type NoteDuration,
   CELL_OPTIONS,
   DUR_SYMBOL,
   REST_SYMBOL,
+  NOTE_DURATIONS,
   PITCH_NAMES,
   formatBeats,
 } from '../types';
@@ -103,12 +105,11 @@ export default function GridEditor({ grid, onCellChange, activeBar, activeNote }
 
   const cycleValue = useCallback((row: number, col: number) => {
     const current = grid[row][col].value;
-    // If it's a rest, cycle the underlying duration but keep it as rest
+    // If it's a rest, cycle through the 4 single durations only
     if (current.kind === 'rest') {
-      const idx = CELL_OPTIONS.findIndex((o) => o.kind === 'single' && o.dur === current.dur);
-      const next = CELL_OPTIONS[(idx + 1) % CELL_OPTIONS.length];
-      const dur = next.kind === 'single' ? next.dur : next.kind === 'tied' ? next.first : current.dur;
-      onCellChange(row, col, { kind: 'rest', dur });
+      const idx = NOTE_DURATIONS.indexOf(current.dur as NoteDuration);
+      const nextDur = NOTE_DURATIONS[(idx + 1) % NOTE_DURATIONS.length];
+      onCellChange(row, col, { kind: 'rest', dur: nextDur });
       return;
     }
     const idx = CELL_OPTIONS.findIndex((o) => cellValuesEqual(o, current));
