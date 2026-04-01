@@ -1,9 +1,8 @@
 {
-  "installCommand": "npm ci && mkdir -p models/mfr && curl -sL -o models/mfr/encoder_model.onnx https://huggingface.co/breezedeus/pix2text-mfr-1.5/resolve/main/encoder_model.onnx && curl -sL -o models/mfr/decoder_model.onnx https://huggingface.co/breezedeus/pix2text-mfr-1.5/resolve/main/decoder_model.onnx && curl -sL -o models/mfr/tokenizer.json https://huggingface.co/breezedeus/pix2text-mfr-1.5/resolve/main/tokenizer.json && curl -sL -o models/mfr/generation_config.json https://huggingface.co/breezedeus/pix2text-mfr-1.5/resolve/main/generation_config.json",
   "functions": {
     "api/scan.py": {
       "maxDuration": 10,
-      "includeFiles": "public/mnist-12.onnx,models/mfr/{encoder_model.onnx,decoder_model.onnx,tokenizer.json,generation_config.json}"
+      "includeFiles": "public/mnist-12.onnx,models/mfr/{encoder_model.onnx,decoder_model.onnx,tokenizer.json}"
     }
   }
 }

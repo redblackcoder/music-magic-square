@@ -50,5 +50,5 @@ tests/fixtures/grids/*.png
 # python
 */__pycache__/*
 
-# MFR model files (downloaded at build time via vercel.json installCommand)
-models/
+# MFR model files (keep generation_config.json out of git — not needed at runtime)
+models/mfr/generation_config.json
