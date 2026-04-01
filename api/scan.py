@@ -54,8 +54,9 @@ class handler(BaseHTTPRequestHandler):
             })
 
         except Exception as e:
-            print(f"[scan] error: {e}")
-            self._error(500, str(e))
+            import traceback
+            traceback.print_exc()
+            self._error(500, "Server is having issues right now, please try again.")
 
     def do_GET(self):
         self._json(200, {"status": "ok"})

@@ -12,13 +12,13 @@ Pass 2: pix2text MFR model (384x384 RGB, LaTeX output).
 
 import os
 import sys
+import json
 
 sys.path.insert(0, os.path.dirname(__file__))
 
 import numpy as np
 import cv2
 import onnxruntime as ort
-from tokenizers import Tokenizer
 
 from cell_value import latex_to_cell_value, NUM_TO_DUR, VALID_SINGLES
 
@@ -43,7 +43,7 @@ _project_root = os.path.join(os.path.dirname(__file__), "..")
 _mnist_session = None
 _mfr_encoder = None
 _mfr_decoder = None
-_mfr_tokenizer = None
+_mfr_id_to_token = None  # pure Python vocab: {int: str}
 
 
 def _get_mnist():
@@ -62,11 +62,35 @@ def _get_mnist():
     return _mnist_session
 
 
+def _load_vocab(tokenizer_path):
+    """Build id→token map from tokenizer.json (pure Python, no `tokenizers` dep)."""
+    with open(tokenizer_path) as f:
+        data = json.load(f)
+    vocab = data["model"]["vocab"]  # {"token": id, ...}
+    id_to_token = {v: k for k, v in vocab.items()}
+    # Add special/added tokens (override if overlap)
+    for t in data.get("added_tokens", []):
+        id_to_token[t["id"]] = t["content"]
+    return id_to_token
+
+
+def _decode_tokens(id_to_token, token_ids):
+    """Decode a list of token IDs to a string, skipping special tokens."""
+    special = {"<pad>", "<s>", "</s>", "<unk>", "<mask>"}
+    parts = []
+    for tid in token_ids:
+        token = id_to_token.get(tid, "")
+        if token not in special:
+            parts.append(token)
+    # Join and replace BPE space marker (Ġ / U+0120) with actual space
+    return "".join(parts).replace("\u0120", " ").strip()
+
+
 def _get_mfr():
-    """Load and cache the MFR encoder, decoder, and tokenizer."""
-    global _mfr_encoder, _mfr_decoder, _mfr_tokenizer
+    """Load and cache the MFR encoder, decoder, and vocab."""
+    global _mfr_encoder, _mfr_decoder, _mfr_id_to_token
     if _mfr_encoder is not None:
-        return _mfr_encoder, _mfr_decoder, _mfr_tokenizer
+        return _mfr_encoder, _mfr_decoder, _mfr_id_to_token
 
     opts = ort.SessionOptions()
     opts.intra_op_num_threads = 1
@@ -75,9 +99,9 @@ def _get_mfr():
     mfr_dir = os.path.join(_project_root, "models", "mfr")
     _mfr_encoder = ort.InferenceSession(os.path.join(mfr_dir, "encoder_model.onnx"), opts)
     _mfr_decoder = ort.InferenceSession(os.path.join(mfr_dir, "decoder_model.onnx"), opts)
-    _mfr_tokenizer = Tokenizer.from_file(os.path.join(mfr_dir, "tokenizer.json"))
+    _mfr_id_to_token = _load_vocab(os.path.join(mfr_dir, "tokenizer.json"))
     print(f"[mfr] loaded encoder + decoder from {mfr_dir}")
-    return _mfr_encoder, _mfr_decoder, _mfr_tokenizer
+    return _mfr_encoder, _mfr_decoder, _mfr_id_to_token
 
 
 # ── Cell extraction ──
@@ -239,7 +263,7 @@ def _run_mfr_pass(warped_gray, cells, pending_indices):
     if not pending_indices:
         return {}
 
-    encoder, decoder, tokenizer = _get_mfr()
+    encoder, decoder, id_to_token = _get_mfr()
 
     # Build batch for pending cells only
     batch = np.zeros((len(pending_indices), 3, MFR_IMAGE_SIZE, MFR_IMAGE_SIZE), dtype=np.float32)
@@ -258,7 +282,7 @@ def _run_mfr_pass(warped_gray, cells, pending_indices):
 
     mfr_results = {}
     for j, idx in enumerate(pending_indices):
-        latex = tokenizer.decode(token_ids_list[j], skip_special_tokens=True)
+        latex = _decode_tokens(id_to_token, token_ids_list[j])
         cell_value = latex_to_cell_value(latex)
         r, c = cells[idx]["row"], cells[idx]["col"]
         confidence = 1.0 if cell_value != DEFAULT_CELL else 0.3
