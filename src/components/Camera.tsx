@@ -98,11 +98,20 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
           return;
         }
         streamRef.current = stream;
+        const track = stream.getVideoTracks()[0];
+        console.log('[camera] track state:', track?.readyState, 'enabled:', track?.enabled, 'muted:', track?.muted);
+        console.log('[camera] track settings:', JSON.stringify(track?.getSettings()));
+
         const video = videoRef.current;
         console.log('[camera] videoRef.current is:', video ? 'present' : 'NULL');
         if (video) {
-          console.log('[camera] video readyState:', video.readyState, 'networkState:', video.networkState);
-          console.log('[camera] video currentSrc:', video.currentSrc, 'srcObject:', video.srcObject);
+          // Listen to all relevant video events
+          for (const evt of ['loadstart', 'loadeddata', 'loadedmetadata', 'canplay', 'playing', 'error', 'stalled', 'suspend'] as const) {
+            video.addEventListener(evt, () => {
+              console.log(`[camera] video event: ${evt}, readyState: ${video.readyState}, videoWidth: ${video.videoWidth}`);
+            });
+          }
+
           video.onloadedmetadata = () => {
             console.log('[camera] onloadedmetadata fired, videoWidth:', video.videoWidth, '×', video.videoHeight);
             video.play().then(() => {
@@ -110,14 +119,20 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
               setReady(true);
             }).catch(err => {
               console.error('[camera] play() rejected:', err);
-              setReady(true); // still allow capture
+              setReady(true);
             });
           };
-          video.onerror = (e) => {
-            console.error('[camera] video error event:', e, 'video.error:', video.error);
-          };
           video.srcObject = stream;
-          console.log('[camera] srcObject assigned, readyState now:', video.readyState);
+          console.log('[camera] srcObject assigned, readyState:', video.readyState);
+
+          // Fallback: if metadata doesn't fire within 3s, check state and force ready
+          setTimeout(() => {
+            console.log('[camera] 3s check — readyState:', video.readyState, 'videoWidth:', video.videoWidth, 'srcObject:', video.srcObject ? 'set' : 'NULL');
+            if (!ready && video.readyState >= 1) {
+              console.log('[camera] forcing ready from timeout (readyState >= 1)');
+              setReady(true);
+            }
+          }, 3000);
         } else {
           console.error('[camera] videoRef is null — cannot attach stream');
         }
