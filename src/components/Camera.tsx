@@ -29,34 +29,6 @@ const VALID_PAIRS: Record<string, [string, string]> = {
   '4+2': ['2', '4'], '8+2': ['2', '8'], '8+4': ['4', '8'],
 };
 
-/**
- * Guide overlay fraction — sized from physical scanning geometry.
- *
- * Physical model:
- *   - Paper grid:  ~13 cm square (user-confirmed 12–15 cm range)
- *   - Distance:    ~30 cm  (comfortable arm-above-desk position)
- *   - Rear camera: 26 mm equivalent focal length (iPhone / most Android)
- *   - Video:       16:9 portrait (common getUserMedia output)
- *
- * FOV derivation (26 mm equiv on 36×24 mm full-frame reference):
- *   Landscape HFOV = 2·atan(36 / (2·26)) ≈ 69°
- *   16:9 crop VFOV = 2·atan(20.25 / (2·26)) ≈ 42.5°
- *   In portrait the narrow axis has the 42.5° FOV.
- *
- *   Visible width at 30 cm = 2 · 30 · tan(42.5°/2) ≈ 23.3 cm
- *   13 cm grid → occupies 13 / 23.3 ≈ 56 % of horizontal frame
- *
- * With default digital zoom (some phones apply 1.5×):
- *   Effective visible width ≈ 15.5 cm → grid occupies 84 % — barely fits.
- *   Fix: request zoom = min via applyConstraints (see startCamera below).
- *
- * Guide at 0.85 means the overlay is 85 % of viewport's smaller dimension.
- * This matches CSS `85vmin` and nearly fills the video width on a portrait
- * phone, leaving ~7.5 % margin on each side for alignment tolerance.
- * The 10 % capture padding further extends the crop sent to the backend.
- */
-const GUIDE_FRACTION = 0.85;
-
 /** Low confidence threshold — cells below this get highlighted */
 const LOW_CONFIDENCE = 0.80;
 
@@ -82,18 +54,9 @@ function isLowConfidence(conf: CellConfidence): boolean {
   return conf.confidence < LOW_CONFIDENCE || conf.source === 'default';
 }
 
-const GHOST_NUMBERS = [
-  ['8', '4', '1', '2+1'],
-  ['1', '2+1', '8', '4'],
-  ['2+1', '1', '4', '8'],
-  ['4', '8', '2+1', '1'],
-];
-
 export default function Camera({ onCapture, onClose }: CameraProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanStage, setScanStage] = useState('');
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
@@ -107,64 +70,13 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
   // Store captured image base64 for debug download
   const [capturedBase64, setCapturedBase64] = useState<string | null>(null);
 
-  // Start camera
+  // Auto-open file picker on mount
   useEffect(() => {
-    let cancelled = false;
-
-    async function startCamera() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: 'environment',
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-          },
-        });
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-
-        // Request minimum zoom to get the widest possible field of view.
-        // Many phones (especially Samsung) default to 1.5–2× digital zoom
-        // in the browser, which narrows the FOV from ~42° to ~28° in
-        // portrait and forces the user to hold the phone much further away.
-        // Resetting to zoom.min restores the native 26 mm-equiv FOV.
-        const track = stream.getVideoTracks()[0];
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const capabilities = track.getCapabilities?.() as any;
-        if (capabilities?.zoom) {
-          try {
-            await track.applyConstraints({
-              advanced: [{ zoom: capabilities.zoom.min } as MediaTrackConstraintSet],
-            });
-          } catch {
-            // zoom constraint not supported on this device — no-op
-          }
-        }
-
-        streamRef.current = stream;
-        const video = videoRef.current;
-        if (video) {
-          video.onloadedmetadata = () => {
-            video.play();
-            setReady(true);
-          };
-          video.srcObject = stream;
-        }
-      } catch {
-        if (!cancelled) {
-          setError('Camera access denied. Please allow camera permission and try again.');
-        }
-      }
-    }
-
-    startCamera();
-
-    return () => {
-      cancelled = true;
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-    };
+    // Small delay to ensure the component is mounted before triggering
+    const timer = setTimeout(() => {
+      fileInputRef.current?.click();
+    }, 100);
+    return () => clearTimeout(timer);
   }, []);
 
   // Initialize editable texts from scan result
@@ -175,7 +87,7 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
     );
   }, [scanResult]);
 
-  /** Send a base64 JPEG + sourceImage to the scan API and set the result. */
+  /** Send a base64 JPEG to the scan API and set the result. */
   const sendToScanApi = useCallback(async (base64: string, sourceImage: ImageData) => {
     setScanStage('Processing...');
     setCapturedBase64(base64);
@@ -203,78 +115,12 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
     });
   }, []);
 
-  const handleCapture = useCallback(async () => {
-    const video = videoRef.current;
-    if (!video || scanning) return;
-
-    setScanning(true);
-    setScanStage('Sending to server...');
-
-    try {
-      // Map the guide overlay from display coordinates to video pixel
-      // coordinates.  The video element uses object-fit: contain, meaning
-      // the entire video is visible with letterboxing on one axis.
-      const vw = video.videoWidth;
-      const vh = video.videoHeight;
-      const dispW = video.clientWidth;
-      const dispH = video.clientHeight;
-
-      // object-fit: contain — scale so the entire video fits inside the
-      // display element, letterboxing the remaining axis.
-      const scale = Math.min(dispW / vw, dispH / vh);
-      const renderedW = vw * scale;   // video width on screen (px)
-      const renderedH = vh * scale;   // video height on screen (px)
-      const offsetX = (dispW - renderedW) / 2; // letterbox offset left
-      const offsetY = (dispH - renderedH) / 2; // letterbox offset top
-
-      // Guide overlay is GUIDE_FRACTION of min(dispW, dispH), centered
-      const guidePx = GUIDE_FRACTION * Math.min(dispW, dispH);
-      const guideLeft = (dispW - guidePx) / 2;
-      const guideTop = (dispH - guidePx) / 2;
-
-      // Convert guide rect from display coords to video pixel coords.
-      // Subtract letterbox offset, then divide by the contain scale.
-      const cropX = (guideLeft - offsetX) / scale;
-      const cropY = (guideTop - offsetY) / scale;
-      const cropW = guidePx / scale;
-      const cropH = guidePx / scale;
-
-      // Add 10% padding to give grid detection room for edge detection
-      const pad = 0.10;
-      const padX = cropW * pad;
-      const padY = cropH * pad;
-      const finalX = Math.max(0, Math.round(cropX - padX));
-      const finalY = Math.max(0, Math.round(cropY - padY));
-      const finalW = Math.min(vw - finalX, Math.round(cropW + 2 * padX));
-      const finalH = Math.min(vh - finalY, Math.round(cropH + 2 * padY));
-
-      console.log(`[capture] video=${vw}x${vh} display=${dispW}x${dispH} scale=${scale.toFixed(3)} guide=${guidePx.toFixed(0)}px → crop=${finalW}x${finalH}`);
-
-      const canvas = document.createElement('canvas');
-      canvas.width = finalW;
-      canvas.height = finalH;
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(video, finalX, finalY, finalW, finalH, 0, 0, finalW, finalH);
-      const sourceImage = ctx.getImageData(0, 0, finalW, finalH);
-
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-      const base64 = dataUrl.split(',')[1];
-
-      await sendToScanApi(base64, sourceImage);
-    } catch (err) {
-      setError(`Scan failed: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setScanning(false);
-    }
-  }, [scanning, sendToScanApi]);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || scanning) return;
 
     setScanning(true);
+    setError(null);
     setScanStage('Reading image...');
 
     try {
@@ -330,16 +176,9 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
     setEditingCell(null);
     setEditedCells(new Set());
     setCapturedBase64(null);
-    // The <video> element is about to remount (it's not rendered during preview).
-    // Reattach the stream on the next frame so the camera feed reappears.
-    requestAnimationFrame(() => {
-      const video = videoRef.current;
-      const stream = streamRef.current;
-      if (video && stream) {
-        video.srcObject = stream;
-        video.play();
-      }
-    });
+    setError(null);
+    // Open file picker again
+    setTimeout(() => fileInputRef.current?.click(), 100);
   }, []);
 
   const handleDownloadImage = useCallback(() => {
@@ -377,10 +216,23 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
     }
   }, []);
 
+  // Hidden file input — always present
+  const fileInput = (
+    <input
+      ref={fileInputRef}
+      type="file"
+      accept="image/*"
+      capture="environment"
+      style={{ display: 'none' }}
+      onChange={handleUpload}
+    />
+  );
+
   // Preview/confirmation screen
   if (scanResult && editedTexts.length === 4) {
     return (
       <div className="camera-container">
+        {fileInput}
         <div className="scan-preview">
           <div className="scan-preview-header">
             <h2>Scan Result</h2>
@@ -446,67 +298,41 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
     );
   }
 
+  // Upload prompt screen
   return (
     <div className="camera-container">
+      {fileInput}
       {error ? (
         <div className="camera-error">
           <p>{error}</p>
           <div className="scan-preview-actions">
-            <button className="btn-secondary" onClick={() => { setError(null); handleRetry(); }}>Retry</button>
+            <button className="btn-secondary" onClick={handleRetry}>Retry</button>
             {capturedBase64 && (import.meta.env.VITE_DEBUG_MODE === 'true' || import.meta.env.VITE_APP_ENV === 'dev') && (
               <button className="btn-secondary" onClick={handleDownloadImage}>Save Image</button>
             )}
             <button className="btn-secondary" onClick={onClose}>Close</button>
           </div>
         </div>
+      ) : scanning ? (
+        <div className="camera-upload-prompt">
+          <div className="scan-progress">
+            <p>{scanStage}</p>
+          </div>
+        </div>
       ) : (
-        <>
-          <video ref={videoRef} autoPlay playsInline muted className="camera-video" />
-
-          <div className="guide-overlay">
-            <div className="guide-mask guide-mask-top" />
-            <div className="guide-mask guide-mask-bottom" />
-            <div className="guide-mask guide-mask-left" />
-            <div className="guide-mask guide-mask-right" />
-            <div className="guide-grid">
-              {GHOST_NUMBERS.flat().map((num, i) => (
-                <div key={i} className="guide-cell">
-                  <span className="guide-number">{num}</span>
-                </div>
-              ))}
+        <div className="camera-upload-prompt">
+          <div className="upload-prompt-content">
+            <div className="upload-icon">&#128247;</div>
+            <h2>Scan Your Grid</h2>
+            <p>Take a photo of your 4×4 grid, or choose an existing image.</p>
+            <div className="upload-prompt-actions">
+              <button className="btn-primary" onClick={() => fileInputRef.current?.click()}>
+                Take Photo / Choose Image
+              </button>
+              <button className="btn-secondary" onClick={onClose}>Cancel</button>
             </div>
           </div>
-
-          <div className="camera-controls">
-            <button className="btn-secondary" onClick={onClose} disabled={scanning}>Cancel</button>
-            <button className="btn-capture" onClick={handleCapture} disabled={!ready || scanning}>
-              <span className="capture-icon" />
-            </button>
-            <button className="btn-secondary" onClick={() => fileInputRef.current?.click()} disabled={scanning}>
-              Upload
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              style={{ display: 'none' }}
-              onChange={handleUpload}
-            />
-          </div>
-
-          {!ready && <div className="camera-loading">Starting camera...</div>}
-          {scanning && (
-            <div className="camera-loading">
-              <div className="scan-progress">
-                <p>{scanStage}</p>
-              </div>
-            </div>
-          )}
-
-          <div className="camera-hint">
-            Write numbers in each cell: 1, 2, 4, 8, or tied (e.g. 1+2)
-          </div>
-        </>
+        </div>
       )}
     </div>
   );

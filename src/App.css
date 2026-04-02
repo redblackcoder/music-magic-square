@@ -363,194 +363,72 @@
   cursor: pointer;
 }
 
-/* ── Camera ── */
+/* ── Camera / Upload ── */
 .camera-container {
   position: fixed;
   inset: 0;
-  background: black;
+  background: #111;
   z-index: 100;
   display: flex;
   flex-direction: column;
 }
 
-.camera-video {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  background: black;
-}
-
-/* ── Guide Overlay (pure CSS — no canvas) ── */
-.guide-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-}
-
-.guide-overlay * {
-  pointer-events: none;
-}
-
-.guide-mask {
-  position: absolute;
-  background: rgba(0, 0, 0, 0.45);
-}
-
-/* The grid is 50vmin square, centered.
-   See GUIDE_FRACTION in Camera.tsx for the physics-based derivation. */
-.guide-mask-top {
-  top: 0;
-  left: 0;
-  right: 0;
-  height: calc(50% - 42.5vmin);
-}
-
-.guide-mask-bottom {
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: calc(50% - 42.5vmin);
-}
-
-.guide-mask-left {
-  top: calc(50% - 42.5vmin);
-  left: 0;
-  width: calc(50% - 42.5vmin);
-  height: 85vmin;
-}
-
-.guide-mask-right {
-  top: calc(50% - 42.5vmin);
-  right: 0;
-  width: calc(50% - 42.5vmin);
-  height: 85vmin;
-}
-
-.guide-grid {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 85vmin;
-  height: 85vmin;
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: repeat(4, 1fr);
-  border: 2.5px dashed rgba(255, 255, 255, 0.85);
-  border-radius: 4px;
-}
-
-.guide-cell {
-  border: 1px dashed rgba(255, 255, 255, 0.5);
+.camera-upload-prompt {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  color: white;
+  padding: 24px;
 }
 
-.guide-number {
-  font-size: 4vmin;
+.upload-prompt-content {
+  text-align: center;
+  max-width: 320px;
+}
+
+.upload-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+
+.upload-prompt-content h2 {
+  font-size: 22px;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.3);
-  user-select: none;
+  margin: 0 0 8px;
 }
 
-.camera-controls {
-  position: absolute;
-  bottom: 32px;
-  left: 0;
-  right: 0;
-  z-index: 10;
+.upload-prompt-content p {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0 0 24px;
+}
+
+.upload-prompt-actions {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  pointer-events: auto;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.camera-controls .btn-secondary {
-  background: rgba(0, 0, 0, 0.6);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  padding: 8px 16px;
-  border-radius: 20px;
-}
-
-.btn-capture {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: white;
-  border: 4px solid var(--accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.btn-capture:active {
-  transform: scale(0.9);
-}
-
-.btn-capture:disabled {
-  opacity: 0.4;
-}
-
-.capture-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-
-.camera-loading {
-  position: absolute;
-  inset: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
+.upload-prompt-actions .btn-primary {
+  padding: 14px 24px;
   font-size: 16px;
+}
+
+.upload-prompt-actions .btn-secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .scan-progress {
   text-align: center;
+  color: white;
 }
 
 .scan-progress p {
   margin: 0 0 12px;
   font-size: 16px;
-}
-
-.progress-bar {
-  width: 200px;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 3px;
-  transition: width 0.3s;
-}
-
-.camera-hint {
-  position: absolute;
-  top: 48px;
-  left: 0;
-  right: 0;
-  z-index: 5;
-  text-align: center;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 14px;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
-  padding: 0 24px;
 }
 
 .camera-error {
@@ -563,14 +441,6 @@
   padding: 24px;
   color: white;
   text-align: center;
-}
-
-.camera-error button {
-  background: var(--accent);
-  color: white;
-  padding: 10px 24px;
-  border-radius: 8px;
-  font-weight: 600;
 }
 
 /* ── Scan Preview / Confirmation ── */
