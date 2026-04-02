@@ -50,12 +50,12 @@ const VALID_PAIRS: Record<string, [string, string]> = {
  *   Effective visible width ≈ 15.5 cm → grid occupies 84 % — barely fits.
  *   Fix: request zoom = min via applyConstraints (see startCamera below).
  *
- * Guide at 0.65 means the overlay is 65 % of viewport's smaller dimension.
- * This matches CSS `65vmin` and maximises the captured area while still
- * leaving margin for alignment tolerance. The 10 % capture padding further
- * extends the crop sent to the backend.
+ * Guide at 0.85 means the overlay is 85 % of viewport's smaller dimension.
+ * This matches CSS `85vmin` and nearly fills the video width on a portrait
+ * phone, leaving ~7.5 % margin on each side for alignment tolerance.
+ * The 10 % capture padding further extends the crop sent to the backend.
  */
-const GUIDE_FRACTION = 0.65;
+const GUIDE_FRACTION = 0.85;
 
 /** Low confidence threshold — cells below this get highlighted */
 const LOW_CONFIDENCE = 0.80;
