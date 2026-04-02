@@ -5,7 +5,8 @@ export type NoteDuration = '1/2' | '1/4' | '1/8' | '1/16';
 export type CellValue =
   | { kind: 'single'; dur: NoteDuration }
   | { kind: 'tied'; first: NoteDuration; second: NoteDuration }
-  | { kind: 'rest'; dur: NoteDuration };
+  | { kind: 'rest'; dur: NoteDuration }
+  | { kind: 'restPair'; first: NoteDuration; second: NoteDuration };
 
 /** Beat value of each note duration (fraction of a whole bar) */
 export const BEAT_VALUES: Record<NoteDuration, number> = {
@@ -19,6 +20,11 @@ export const BEAT_VALUES: Record<NoteDuration, number> = {
 export function getCellBeats(value: CellValue): number {
   if (value.kind === 'single' || value.kind === 'rest') return BEAT_VALUES[value.dur];
   return BEAT_VALUES[value.first] + BEAT_VALUES[value.second];
+}
+
+/** Check if a cell value is any kind of rest */
+export function isRest(value: CellValue): boolean {
+  return value.kind === 'rest' || value.kind === 'restPair';
 }
 
 /** Format cell beats as a fraction string */
