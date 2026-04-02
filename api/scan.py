@@ -19,6 +19,7 @@ import cv2
 
 from grid_detection import detect_grid
 from cell_recognition import recognize_cells
+from gemini_recognition import recognize_with_gemini
 
 
 class handler(BaseHTTPRequestHandler):
@@ -50,16 +51,22 @@ class handler(BaseHTTPRequestHandler):
                     f.write(img_bytes)
                 print(f"[scan] saved debug image: {debug_path}")
 
-            # Grid detection
-            warped, cells, quad_corners, grid_found = detect_grid(img)
+            # Try Gemini LLM first — fall back to local models only on
+            # API errors (rate limit, missing key, no credits, etc.)
+            gemini_result = recognize_with_gemini(image_b64)
 
-            # Cell recognition
-            values, confidences = recognize_cells(warped, cells)
+            if gemini_result is not None:
+                values, confidences = gemini_result
+                print("[scan] using Gemini result")
+            else:
+                print("[scan] Gemini unavailable, falling back to local models")
+                warped, cells, quad_corners, grid_found = detect_grid(img)
+                values, confidences = recognize_cells(warped, cells)
 
             self._json(200, {
                 "values": values,
-                "gridFound": grid_found,
-                "quadCorners": quad_corners,
+                "gridFound": True,
+                "quadCorners": [],
                 "confidences": confidences,
             })
 
