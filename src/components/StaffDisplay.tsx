@@ -116,6 +116,49 @@ function NoteOnStaff({ value, pitch, x, playing }: {
     );
   }
 
+  if (value.kind === 'restTriple') {
+    const restY = posToY(4);
+    const restDy = 0.35 * fontSize;
+    const sym1 = REST_SYMBOL[value.first];
+    const sym2 = REST_SYMBOL[value.second];
+    const sym3 = REST_SYMBOL[value.third];
+    const tripleGap = 12;
+    return (
+      <g>
+        <text
+          x={x - tripleGap} y={restY + restDy}
+          fill={color}
+          fontFamily="Bravura, serif"
+          fontSize={sym1.size * 0.7}
+          textAnchor="middle"
+          opacity={0.7}
+        >
+          {sym1.char}
+        </text>
+        <text
+          x={x} y={restY + restDy}
+          fill={color}
+          fontFamily="Bravura, serif"
+          fontSize={sym2.size * 0.7}
+          textAnchor="middle"
+          opacity={0.7}
+        >
+          {sym2.char}
+        </text>
+        <text
+          x={x + tripleGap} y={restY + restDy}
+          fill={color}
+          fontFamily="Bravura, serif"
+          fontSize={sym3.size * 0.7}
+          textAnchor="middle"
+          opacity={0.7}
+        >
+          {sym3.char}
+        </text>
+      </g>
+    );
+  }
+
   if (value.kind === 'single') {
     return (
       <g>
@@ -135,6 +178,39 @@ function NoteOnStaff({ value, pitch, x, playing }: {
           textAnchor="middle"
         >
           {getDurChar(value.dur)}
+        </text>
+      </g>
+    );
+  }
+
+  if (value.kind === 'triple') {
+    const tripleGap = 16;
+    const x1 = x - tripleGap;
+    const x2 = x;
+    const x3 = x + tripleGap;
+    const tinySize = fontSize * 0.6;
+    const tinyDy = 0.35 * tinySize;
+
+    return (
+      <g>
+        {lLines.map((lp) => (
+          <line
+            key={lp}
+            x1={x - 20} x2={x + 20}
+            y1={posToY(lp)} y2={posToY(lp)}
+            stroke={color} strokeWidth={1} opacity={0.5}
+          />
+        ))}
+        <text x={x1} y={y + tinyDy} fill={color} fontFamily="Bravura, serif" fontSize={tinySize} textAnchor="middle">
+          {getDurChar(value.first)}
+        </text>
+        <path d={`M${x1 + 3} ${y + 3} Q${(x1 + x2) / 2} ${y + 10} ${x2 - 3} ${y + 3}`} fill="none" stroke={color} strokeWidth={1.2} />
+        <text x={x2} y={y + tinyDy} fill={color} fontFamily="Bravura, serif" fontSize={tinySize} textAnchor="middle">
+          {getDurChar(value.second)}
+        </text>
+        <path d={`M${x2 + 3} ${y + 3} Q${(x2 + x3) / 2} ${y + 10} ${x3 - 3} ${y + 3}`} fill="none" stroke={color} strokeWidth={1.2} />
+        <text x={x3} y={y + tinyDy} fill={color} fontFamily="Bravura, serif" fontSize={tinySize} textAnchor="middle">
+          {getDurChar(value.third)}
         </text>
       </g>
     );

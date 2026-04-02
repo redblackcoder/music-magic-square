@@ -55,6 +55,16 @@ const VALID_PAIRS: [number, number][] = [
   [4, 8],
 ];
 
+/** Compound values (sum of sixteenths) → tied pair decomposition */
+const COMPOUND_TO_PAIR: Record<number, [number, number]> = {
+  3: [1, 2], 5: [1, 4], 6: [2, 4], 9: [1, 8], 10: [2, 8],
+};
+
+/** Triple-tied compound value */
+const COMPOUND_TO_TRIPLE: Record<number, [number, number, number]> = {
+  7: [4, 2, 1],
+};
+
 /** Default fallback when recognition fails */
 export const DEFAULT_CELL: CellValue = { kind: 'single', dur: '1/4' };
 
@@ -67,6 +77,14 @@ export function parseCellText(text: string): CellValue | null {
     const n = parseInt(singleMatch[1], 10);
     if (VALID_SINGLES.has(n) && NUM_TO_DUR[n]) {
       return { kind: 'single', dur: NUM_TO_DUR[n] };
+    }
+    if (COMPOUND_TO_TRIPLE[n]) {
+      const [a, b, c] = COMPOUND_TO_TRIPLE[n];
+      return { kind: 'triple', first: NUM_TO_DUR[a], second: NUM_TO_DUR[b], third: NUM_TO_DUR[c] };
+    }
+    if (COMPOUND_TO_PAIR[n]) {
+      const [a, b] = COMPOUND_TO_PAIR[n];
+      return { kind: 'tied', first: NUM_TO_DUR[a], second: NUM_TO_DUR[b] };
     }
   }
 
@@ -260,7 +278,7 @@ export async function recognizeGrid(
     for (let i = 0; i < cells.length; i++) {
       const { x, y, w, h, row, col } = cells[i];
       const cell = await recognizeCellFromImageData(recognizer, warped, x, y, w, h);
-      const label = (cell.kind === 'tied' || cell.kind === 'restPair') ? `${cell.first}+${cell.second}` : cell.dur;
+      const label = (cell.kind === 'triple' || cell.kind === 'restTriple') ? `${cell.first}+${cell.second}+${cell.third}` : (cell.kind === 'tied' || cell.kind === 'restPair') ? `${cell.first}+${cell.second}` : cell.dur;
       console.log(`[scan] cell[${row},${col}] (${x},${y} ${w}×${h}) → ${label}`);
       values[row].push(cell);
       onProgress?.((i + 1) / 16);
@@ -274,6 +292,7 @@ export async function recognizeGrid(
   console.log('[scan] result grid:');
   for (let r = 0; r < 4; r++) {
     const row = values[r].map(v => {
+      if (v.kind === 'triple' || v.kind === 'restTriple') return `${v.first}+${v.second}+${v.third}`;
       if (v.kind === 'tied' || v.kind === 'restPair') return `${v.first}+${v.second}`;
       return v.dur;
     });

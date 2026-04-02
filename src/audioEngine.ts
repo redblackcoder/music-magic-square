@@ -55,7 +55,7 @@ export async function playBars(
       const capturedBi = bi;
       const capturedNi = ni;
 
-      if (cell.value.kind === 'rest' || cell.value.kind === 'restPair') {
+      if (cell.value.kind === 'rest' || cell.value.kind === 'restPair' || cell.value.kind === 'restTriple') {
         // Rest: advance time but don't produce sound
         Tone.getTransport().schedule(() => {
           onNoteStart?.(capturedBi, capturedNi);

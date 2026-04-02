@@ -11,7 +11,7 @@ import json
 import os
 import re
 
-from cell_value import NUM_TO_DUR, VALID_SINGLES, VALID_PAIRS, DEFAULT_CELL
+from cell_value import NUM_TO_DUR, VALID_SINGLES, VALID_PAIRS, COMPOUND_TO_PAIR, COMPOUND_TO_TRIPLE, DEFAULT_CELL
 
 
 GEMINI_MODEL = "gemini-3.1-flash-lite-preview"
@@ -35,12 +35,18 @@ def _parse_cell(raw) -> dict:
     """Convert a single Gemini cell value into a CellValue dict."""
     text = str(raw).strip()
 
-    # Single number
+    # Single number (standard duration or compound value like 3, 5, 6, 9, 10)
     m = re.match(r"^(\d+)$", text)
     if m:
         n = int(m.group(1))
         if n in VALID_SINGLES and n in NUM_TO_DUR:
             return {"kind": "single", "dur": NUM_TO_DUR[n]}
+        if n in COMPOUND_TO_TRIPLE:
+            a, b, c = COMPOUND_TO_TRIPLE[n]
+            return {"kind": "triple", "first": NUM_TO_DUR[a], "second": NUM_TO_DUR[b], "third": NUM_TO_DUR[c]}
+        if n in COMPOUND_TO_PAIR:
+            a, b = COMPOUND_TO_PAIR[n]
+            return {"kind": "tied", "first": NUM_TO_DUR[a], "second": NUM_TO_DUR[b]}
 
     # Sum expression: "1 + 2", "1+2", etc.
     clean = text.replace(" ", "")

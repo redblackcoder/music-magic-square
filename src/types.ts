@@ -5,8 +5,10 @@ export type NoteDuration = '1/2' | '1/4' | '1/8' | '1/16';
 export type CellValue =
   | { kind: 'single'; dur: NoteDuration }
   | { kind: 'tied'; first: NoteDuration; second: NoteDuration }
+  | { kind: 'triple'; first: NoteDuration; second: NoteDuration; third: NoteDuration }
   | { kind: 'rest'; dur: NoteDuration }
-  | { kind: 'restPair'; first: NoteDuration; second: NoteDuration };
+  | { kind: 'restPair'; first: NoteDuration; second: NoteDuration }
+  | { kind: 'restTriple'; first: NoteDuration; second: NoteDuration; third: NoteDuration };
 
 /** Beat value of each note duration (fraction of a whole bar) */
 export const BEAT_VALUES: Record<NoteDuration, number> = {
@@ -19,12 +21,14 @@ export const BEAT_VALUES: Record<NoteDuration, number> = {
 /** Get the total beat value of a cell */
 export function getCellBeats(value: CellValue): number {
   if (value.kind === 'single' || value.kind === 'rest') return BEAT_VALUES[value.dur];
+  if (value.kind === 'triple' || value.kind === 'restTriple')
+    return BEAT_VALUES[value.first] + BEAT_VALUES[value.second] + BEAT_VALUES[value.third];
   return BEAT_VALUES[value.first] + BEAT_VALUES[value.second];
 }
 
 /** Check if a cell value is any kind of rest */
 export function isRest(value: CellValue): boolean {
-  return value.kind === 'rest' || value.kind === 'restPair';
+  return value.kind === 'rest' || value.kind === 'restPair' || value.kind === 'restTriple';
 }
 
 /** Format cell beats as a fraction string */
@@ -70,6 +74,7 @@ export const CELL_OPTIONS: CellValue[] = [
   { kind: 'tied', first: '1/2', second: '1/16' },   // 9/16
   { kind: 'tied', first: '1/2', second: '1/8' },    // 5/8
   { kind: 'tied', first: '1/2', second: '1/4' },    // 3/4
+  { kind: 'triple', first: '1/4', second: '1/8', third: '1/16' },  // 7/16
 ];
 
 /** Bravura (SMuFL) full-glyph characters for each duration (includes stem) */

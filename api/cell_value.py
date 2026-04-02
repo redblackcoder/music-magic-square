@@ -14,6 +14,17 @@ DUR_TO_NUM = {"1/16": "1", "1/8": "2", "1/4": "4", "1/2": "8"}
 VALID_SINGLES = {1, 2, 4, 8}
 VALID_PAIRS = {(1, 2), (1, 4), (1, 8), (2, 4), (2, 8), (4, 8)}
 
+# Compound values (sum of sixteenths) → tied pair decomposition
+# e.g. 3 sixteenths = 1+2 = tied(1/16, 1/8)
+COMPOUND_TO_PAIR: dict[int, tuple[int, int]] = {
+    3: (1, 2), 5: (1, 4), 6: (2, 4), 9: (1, 8), 10: (2, 8),
+}
+
+# Triple-tied compound value: 7 sixteenths = 4+2+1 = 1/4 + 1/8 + 1/16
+COMPOUND_TO_TRIPLE: dict[int, tuple[int, int, int]] = {
+    7: (4, 2, 1),
+}
+
 DEFAULT_CELL = {"kind": "single", "dur": "1/4"}
 
 
@@ -32,12 +43,18 @@ def latex_to_cell_value(latex: str) -> dict:
     clean = clean.replace("{", "").replace("}", "").replace("$", "")
     clean = clean.replace(" ", "").replace("^", "").replace("_", "")
 
-    # Single number
+    # Single number (standard duration or compound value)
     m = re.match(r"^(\d+)$", clean)
     if m:
         n = int(m.group(1))
         if n in VALID_SINGLES and n in NUM_TO_DUR:
             return {"kind": "single", "dur": NUM_TO_DUR[n]}
+        if n in COMPOUND_TO_TRIPLE:
+            a, b, c = COMPOUND_TO_TRIPLE[n]
+            return {"kind": "triple", "first": NUM_TO_DUR[a], "second": NUM_TO_DUR[b], "third": NUM_TO_DUR[c]}
+        if n in COMPOUND_TO_PAIR:
+            a, b = COMPOUND_TO_PAIR[n]
+            return {"kind": "tied", "first": NUM_TO_DUR[a], "second": NUM_TO_DUR[b]}
 
     # Sum expression (e.g. "1+2", "4+8")
     m = re.match(r"^(\d+)\+(\d+)$", clean)
@@ -48,18 +65,26 @@ def latex_to_cell_value(latex: str) -> dict:
         if (a, b) in VALID_PAIRS and a in NUM_TO_DUR and b in NUM_TO_DUR:
             return {"kind": "tied", "first": NUM_TO_DUR[a], "second": NUM_TO_DUR[b]}
 
-    # Fallback: try to find any single valid digit in the cleaned string
+    # Fallback: try to find any valid number in the cleaned string
     digits = re.findall(r"\d+", clean)
     for d in digits:
         n = int(d)
         if n in VALID_SINGLES and n in NUM_TO_DUR:
             return {"kind": "single", "dur": NUM_TO_DUR[n]}
+        if n in COMPOUND_TO_TRIPLE:
+            a, b, c = COMPOUND_TO_TRIPLE[n]
+            return {"kind": "triple", "first": NUM_TO_DUR[a], "second": NUM_TO_DUR[b], "third": NUM_TO_DUR[c]}
+        if n in COMPOUND_TO_PAIR:
+            a, b = COMPOUND_TO_PAIR[n]
+            return {"kind": "tied", "first": NUM_TO_DUR[a], "second": NUM_TO_DUR[b]}
 
     return DEFAULT_CELL
 
 
 def cell_value_to_label(cv: dict) -> str:
-    """Convert a CellValue dict back to a short label like '4' or '1+2'."""
+    """Convert a CellValue dict back to a short label like '4', '1+2', or '4+2+1'."""
     if cv["kind"] == "single":
         return DUR_TO_NUM.get(cv["dur"], "?")
+    if cv["kind"] == "triple":
+        return f"{DUR_TO_NUM.get(cv['first'], '?')}+{DUR_TO_NUM.get(cv['second'], '?')}+{DUR_TO_NUM.get(cv['third'], '?')}"
     return f"{DUR_TO_NUM.get(cv['first'], '?')}+{DUR_TO_NUM.get(cv['second'], '?')}"

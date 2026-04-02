@@ -5,7 +5,6 @@ import {
   CELL_OPTIONS,
   DUR_SYMBOL,
   REST_SYMBOL,
-  NOTE_DURATIONS,
   PITCH_NAMES,
   formatBeats,
   isRest,
@@ -35,6 +34,8 @@ function cellValuesEqual(a: CellValue, b: CellValue): boolean {
   if (a.kind === 'tied' && b.kind === 'tied') return a.first === b.first && a.second === b.second;
   if (a.kind === 'rest' && b.kind === 'rest') return a.dur === b.dur;
   if (a.kind === 'restPair' && b.kind === 'restPair') return a.first === b.first && a.second === b.second;
+  if (a.kind === 'triple' && b.kind === 'triple') return a.first === b.first && a.second === b.second && a.third === b.third;
+  if (a.kind === 'restTriple' && b.kind === 'restTriple') return a.first === b.first && a.second === b.second && a.third === b.third;
   return false;
 }
 
@@ -65,6 +66,26 @@ function CellSymbol({ value }: { value: CellValue }) {
     );
   }
 
+  if (value.kind === 'restTriple') {
+    const sym1 = REST_SYMBOL[value.first];
+    const sym2 = REST_SYMBOL[value.second];
+    const sym3 = REST_SYMBOL[value.third];
+    const restSize = 16;
+    return (
+      <span className="cell-tied-notes">
+        <span className="cell-note bravura" style={{ fontSize: restSize }}>
+          {sym1.char}
+        </span>
+        <span className="cell-note bravura" style={{ fontSize: restSize }}>
+          {sym2.char}
+        </span>
+        <span className="cell-note bravura" style={{ fontSize: restSize }}>
+          {sym3.char}
+        </span>
+      </span>
+    );
+  }
+
   if (value.kind === 'single') {
     const sym = DUR_SYMBOL[value.dur];
     return (
@@ -73,6 +94,33 @@ function CellSymbol({ value }: { value: CellValue }) {
         style={{ fontSize: sym.size, transform: `translateY(${sym.dy}px)` }}
       >
         {sym.char}
+      </span>
+    );
+  }
+
+  if (value.kind === 'triple') {
+    const sym1 = DUR_SYMBOL[value.first];
+    const sym2 = DUR_SYMBOL[value.second];
+    const sym3 = DUR_SYMBOL[value.third];
+    const tripleSize = 18;
+    const tripleDy = 4;
+    return (
+      <span className="cell-tied">
+        <span className="cell-tied-notes">
+          <span className="cell-note bravura" style={{ fontSize: tripleSize, transform: `translateY(${tripleDy}px)` }}>
+            {sym1.char}
+          </span>
+          <span className="cell-note bravura" style={{ fontSize: tripleSize, transform: `translateY(${tripleDy}px)` }}>
+            {sym2.char}
+          </span>
+          <span className="cell-note bravura" style={{ fontSize: tripleSize, transform: `translateY(${tripleDy}px)` }}>
+            {sym3.char}
+          </span>
+        </span>
+        <svg className="tie-arc" viewBox="0 0 50 10" width="50" height="8">
+          <path d="M4 2 Q14 10 24 2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M26 2 Q36 10 46 2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+        </svg>
       </span>
     );
   }
@@ -110,8 +158,10 @@ function toggleRest(value: CellValue): CellValue {
   if (value.kind === 'rest') return { kind: 'single', dur: value.dur };
   if (value.kind === 'single') return { kind: 'rest', dur: value.dur };
   if (value.kind === 'restPair') return { kind: 'tied', first: value.first, second: value.second };
-  // tied → two rests preserving both durations
-  return { kind: 'restPair', first: value.first, second: value.second };
+  if (value.kind === 'tied') return { kind: 'restPair', first: value.first, second: value.second };
+  if (value.kind === 'restTriple') return { kind: 'triple', first: value.first, second: value.second, third: value.third };
+  // triple → restTriple
+  return { kind: 'restTriple', first: value.first, second: value.second, third: value.third };
 }
 
 const LONG_PRESS_MS = 500;
@@ -123,12 +173,12 @@ export default function GridEditor({ grid, onCellChange, activeBar, activeNote }
 
   const cycleValue = useCallback((row: number, col: number) => {
     const current = grid[row][col].value;
-    // If it's a rest, cycle through the 4 single durations only
-    if (current.kind === 'rest' || current.kind === 'restPair') {
-      const curDur = current.kind === 'rest' ? current.dur : current.first;
-      const idx = NOTE_DURATIONS.indexOf(curDur);
-      const nextDur = NOTE_DURATIONS[(idx + 1) % NOTE_DURATIONS.length];
-      onCellChange(row, col, { kind: 'rest', dur: nextDur });
+    if (isRest(current)) {
+      // Cycle through rest equivalents of CELL_OPTIONS
+      const restOptions = CELL_OPTIONS.map(toggleRest);
+      const idx = restOptions.findIndex((o) => cellValuesEqual(o, current));
+      const next = restOptions[(idx + 1) % restOptions.length];
+      onCellChange(row, col, next);
       return;
     }
     const idx = CELL_OPTIONS.findIndex((o) => cellValuesEqual(o, current));
