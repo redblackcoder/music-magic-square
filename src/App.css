@@ -399,33 +399,34 @@
   background: rgba(0, 0, 0, 0.45);
 }
 
-/* The grid is 55vmin square, centered */
+/* The grid is 50vmin square, centered.
+   See GUIDE_FRACTION in Camera.tsx for the physics-based derivation. */
 .guide-mask-top {
   top: 0;
   left: 0;
   right: 0;
-  height: calc(50% - 27.5vmin);
+  height: calc(50% - 25vmin);
 }
 
 .guide-mask-bottom {
   bottom: 0;
   left: 0;
   right: 0;
-  height: calc(50% - 27.5vmin);
+  height: calc(50% - 25vmin);
 }
 
 .guide-mask-left {
-  top: calc(50% - 27.5vmin);
+  top: calc(50% - 25vmin);
   left: 0;
-  width: calc(50% - 27.5vmin);
-  height: 55vmin;
+  width: calc(50% - 25vmin);
+  height: 50vmin;
 }
 
 .guide-mask-right {
-  top: calc(50% - 27.5vmin);
+  top: calc(50% - 25vmin);
   right: 0;
-  width: calc(50% - 27.5vmin);
-  height: 55vmin;
+  width: calc(50% - 25vmin);
+  height: 50vmin;
 }
 
 .guide-grid {
@@ -433,8 +434,8 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 55vmin;
-  height: 55vmin;
+  width: 50vmin;
+  height: 50vmin;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: repeat(4, 1fr);

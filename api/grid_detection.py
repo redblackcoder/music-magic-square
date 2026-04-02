@@ -58,11 +58,27 @@ def detect_grid(img):
         if area < small_area * 0.05:
             continue
         peri = cv2.arcLength(cnt, True)
-        approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
-        if len(approx) == 4 and cv2.isContourConvex(approx) and area > best_area:
+        # Try progressively relaxed epsilon values.  At 0.02 a grid with
+        # internal lines touching the border produces 10-14 vertices because
+        # the interior T-junctions create small notches.  Relaxing to 0.04–0.06
+        # smooths those away while still capturing the four true corners.
+        # Fallback: convex hull, which always yields the outer quad.
+        quad_pts = None
+        for eps in (0.02, 0.04, 0.06):
+            approx = cv2.approxPolyDP(cnt, eps * peri, True)
+            if len(approx) == 4 and cv2.isContourConvex(approx):
+                quad_pts = approx
+                break
+        if quad_pts is None:
+            # Last resort: convex hull of the contour
+            hull = cv2.convexHull(cnt)
+            approx = cv2.approxPolyDP(hull, 0.02 * cv2.arcLength(hull, True), True)
+            if len(approx) == 4 and cv2.isContourConvex(approx):
+                quad_pts = approx
+        if quad_pts is not None and area > best_area:
             best_area = area
             best_quad = []
-            for pt in approx:
+            for pt in quad_pts:
                 best_quad.append([
                     round(pt[0][0] / scale),
                     round(pt[0][1] / scale),

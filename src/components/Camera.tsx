@@ -29,8 +29,32 @@ const VALID_PAIRS: Record<string, [string, string]> = {
   '4+2': ['2', '4'], '8+2': ['2', '8'], '8+4': ['4', '8'],
 };
 
-/** Guide overlay is 55% of the smaller viewport dimension (matches CSS 55vmin) */
-const GUIDE_FRACTION = 0.55;
+/**
+ * Guide overlay fraction — sized from physical scanning geometry.
+ *
+ * Physical model:
+ *   - Paper grid:  ~13 cm square (user-confirmed 12–15 cm range)
+ *   - Distance:    ~30 cm  (comfortable arm-above-desk position)
+ *   - Rear camera: 26 mm equivalent focal length (iPhone / most Android)
+ *   - Video:       16:9 portrait (common getUserMedia output)
+ *
+ * FOV derivation (26 mm equiv on 36×24 mm full-frame reference):
+ *   Landscape HFOV = 2·atan(36 / (2·26)) ≈ 69°
+ *   16:9 crop VFOV = 2·atan(20.25 / (2·26)) ≈ 42.5°
+ *   In portrait the narrow axis has the 42.5° FOV.
+ *
+ *   Visible width at 30 cm = 2 · 30 · tan(42.5°/2) ≈ 23.3 cm
+ *   13 cm grid → occupies 13 / 23.3 ≈ 56 % of horizontal frame
+ *
+ * With default digital zoom (some phones apply 1.5×):
+ *   Effective visible width ≈ 15.5 cm → grid occupies 84 % — barely fits.
+ *   Fix: request zoom = min via applyConstraints (see startCamera below).
+ *
+ * Guide at 0.50 means the overlay is 50 % of viewport's smaller dimension.
+ * This matches CSS `50vmin` and leaves ~6 % margin on each side for
+ * alignment tolerance at 30 cm on a non-zoomed 26 mm camera.
+ */
+const GUIDE_FRACTION = 0.50;
 
 /** Low confidence threshold — cells below this get highlighted */
 const LOW_CONFIDENCE = 0.80;
@@ -95,6 +119,25 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
           stream.getTracks().forEach((t) => t.stop());
           return;
         }
+
+        // Request minimum zoom to get the widest possible field of view.
+        // Many phones (especially Samsung) default to 1.5–2× digital zoom
+        // in the browser, which narrows the FOV from ~42° to ~28° in
+        // portrait and forces the user to hold the phone much further away.
+        // Resetting to zoom.min restores the native 26 mm-equiv FOV.
+        const track = stream.getVideoTracks()[0];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const capabilities = track.getCapabilities?.() as any;
+        if (capabilities?.zoom) {
+          try {
+            await track.applyConstraints({
+              advanced: [{ zoom: capabilities.zoom.min } as MediaTrackConstraintSet],
+            });
+          } catch {
+            // zoom constraint not supported on this device — no-op
+          }
+        }
+
         streamRef.current = stream;
         const video = videoRef.current;
         if (video) {
@@ -289,6 +332,16 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
     setEditingCell(null);
     setEditedCells(new Set());
     setCapturedBase64(null);
+    // The <video> element is about to remount (it's not rendered during preview).
+    // Reattach the stream on the next frame so the camera feed reappears.
+    requestAnimationFrame(() => {
+      const video = videoRef.current;
+      const stream = streamRef.current;
+      if (video && stream) {
+        video.srcObject = stream;
+        video.play();
+      }
+    });
   }, []);
 
   const handleDownloadImage = useCallback(() => {
@@ -385,7 +438,7 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
 
           <div className="scan-preview-actions">
             <button className="btn-secondary" onClick={handleRetry}>Retry</button>
-            {import.meta.env.VITE_DEBUG_MODE === 'true' && (
+            {(import.meta.env.VITE_DEBUG_MODE === 'true' || import.meta.env.VITE_APP_ENV === 'dev') && (
               <button className="btn-secondary" onClick={handleDownloadImage}>Save Image</button>
             )}
             <button className="btn-primary" onClick={handleAccept} disabled={!allValid}>Accept</button>
