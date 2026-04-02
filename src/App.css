@@ -26,6 +26,31 @@
   margin-top: 4px;
 }
 
+/* ── Tab Bar ── */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  background: var(--bg-surface);
+  border-radius: 10px;
+  padding: 3px;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: transparent;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.tab-btn.active {
+  background: var(--accent);
+  color: white;
+}
+
 /* ── Action Buttons ── */
 .actions {
   display: flex;
@@ -690,4 +715,339 @@
   padding: 10px;
   border-radius: 8px;
   margin-top: 4px;
+}
+
+/* ══════════ Educational Pages ══════════ */
+.edu-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.edu-part-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent);
+  text-align: center;
+  margin: 8px 0 0;
+  letter-spacing: 0.5px;
+}
+
+.edu-card {
+  background: var(--bg-surface);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.edu-card h2,
+.edu-card h3 {
+  color: var(--text-bright);
+  margin: 0 0 8px;
+}
+
+.edu-card h2 { font-size: 18px; }
+.edu-card h3 { font-size: 15px; }
+
+.edu-card p {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text);
+  margin: 0 0 10px;
+}
+
+.edu-card p:last-child { margin-bottom: 0; }
+
+.edu-card ul, .edu-card ol {
+  padding-left: 24px;
+}
+
+.edu-card strong { color: var(--text-bright); }
+.edu-card em { color: var(--accent); font-style: normal; }
+
+/* ── Mini Magic Square Grid ── */
+.edu-grid-example {
+  text-align: center;
+  margin: 12px 0;
+}
+
+.edu-mini-grid {
+  display: inline-grid;
+  gap: 3px;
+}
+
+.edu-mini-grid-3 { grid-template-columns: repeat(3, 36px); }
+.edu-mini-grid-4 { grid-template-columns: repeat(4, 36px); }
+
+.edu-mini-grid.lo-shu { grid-template-columns: repeat(3, 36px); }
+
+.edu-mini-cell {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text-bright);
+  font-family: var(--mono);
+}
+
+.edu-caption {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 8px 0 0;
+}
+
+/* ── Note Duration Table ── */
+.edu-note-table {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 12px 0;
+}
+
+.edu-note-row {
+  display: grid;
+  grid-template-columns: 50px 1fr 70px 90px;
+  align-items: center;
+  padding: 6px 8px;
+  gap: 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.edu-note-table-sm .edu-note-row {
+  grid-template-columns: 50px 1fr 90px;
+}
+
+.edu-note-row.edu-note-header {
+  background: transparent;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.edu-note-row .mono {
+  font-family: var(--mono);
+  color: var(--text-bright);
+}
+
+/* ── Note Visual Cards ── */
+.edu-note-visual {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+
+.edu-note-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  padding: 12px 14px;
+  min-width: 72px;
+}
+
+.edu-note-card strong {
+  font-size: 12px;
+  color: var(--text-bright);
+}
+
+.edu-dim {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* ── Tied Note Examples ── */
+.edu-tied-example {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.edu-tied-example h3 {
+  font-size: 14px;
+  margin: 0 0 6px;
+}
+
+.edu-tied-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.edu-tied-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.edu-tied-demo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.edu-tied-notes {
+  display: flex;
+  align-items: center;
+}
+
+.edu-tied-group {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.edu-tied-notes-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.edu-tie-arc {
+  display: block;
+  color: var(--text-bright);
+  margin-top: -2px;
+}
+
+/* ── Bar Fill Example ── */
+.edu-bar-example {
+  margin: 12px 0;
+}
+
+.edu-bar-fill {
+  display: flex;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.edu-bar-segment {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.edu-bar-segment:last-child { border-right: none; }
+
+.edu-bar-label {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--text-dim);
+}
+
+/* ── Steps / Lists ── */
+.edu-steps {
+  padding-left: 20px;
+  margin: 8px 0 0;
+}
+
+.edu-steps li {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+/* ── Small Note ── */
+.edu-note-sm {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 8px;
+}
+
+/* ── Staff SVG Diagram ── */
+.edu-staff-diagram {
+  text-align: center;
+  margin: 12px 0;
+}
+
+.edu-staff-svg {
+  display: block;
+  margin: 0 auto;
+}
+
+/* ── Formula ── */
+.edu-formula {
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-bright);
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  margin: 8px 0;
+}
+
+.edu-formula-examples {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+/* ── Definition List ── */
+.edu-def-list {
+  margin: 8px 0 0;
+}
+
+.edu-def-list dt {
+  font-weight: 700;
+  color: var(--text-bright);
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+.edu-def-list dt:first-child { margin-top: 0; }
+
+.edu-def-list dd {
+  margin: 2px 0 0 0;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+/* ── Fun Facts ── */
+.edu-fun-facts {
+  list-style: disc;
+  padding-left: 18px;
+  margin: 8px 0 0;
+}
+
+.edu-fun-facts li {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+/* ── Bravura inline helper ── */
+.bravura {
+  font-family: 'Bravura', serif;
 }

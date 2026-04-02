@@ -1,5 +1,8 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import Camera from './components/Camera';
+import TabBar, { type Tab } from './components/TabBar';
+import LearnPage from './components/LearnPage';
+import DetailsPage from './components/DetailsPage';
 import GridEditor from './components/GridEditor';
 import StaffDisplay from './components/StaffDisplay';
 import PlaybackControls from './components/PlaybackControls';
@@ -10,10 +13,9 @@ import type { MusicGrid, CellValue } from './types';
 import { MELODY_PRESETS } from './types';
 import './App.css';
 
-type View = 'main' | 'camera';
-
 function App() {
-  const [view, setView] = useState<View>('main');
+  const [tab, setTab] = useState<Tab>('learn');
+  const [showCamera, setShowCamera] = useState(false);
   const [grid, setGrid] = useState<MusicGrid>(() => createEmptyGrid(MELODY_PRESETS[0].pitches));
   const [isPlaying, setIsPlaying] = useState(false);
   const [bpm, setBpm] = useState(120);
@@ -54,7 +56,7 @@ function App() {
         }))
       )
     );
-    setView('main');
+    setShowCamera(false);
   }, [melody]);
 
   const handlePlay = useCallback(async () => {
@@ -91,77 +93,87 @@ function App() {
     setActiveNote(-1);
   }, []);
 
-  if (view === 'camera') {
-    return <Camera onCapture={handleCapture} onClose={() => setView('main')} />;
-  }
-
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1>Music Magic Square</h1>
-        <p className="subtitle">Each row, column &amp; diagonal = 1 bar in 4/4 time</p>
-      </header>
+    <>
+      {showCamera && (
+        <Camera onCapture={handleCapture} onClose={() => setShowCamera(false)} />
+      )}
 
-      <div className="actions">
-        <button className="btn-primary" onClick={() => setView('camera')}>
-          Scan Grid
-        </button>
-      </div>
+      <div className="app">
+        <header className="app-header">
+          <h1>Music Magic Square</h1>
+          <p className="subtitle">Each row, column &amp; diagonal = 1 bar in 4/4 time</p>
+        </header>
 
-      <div className="melody-selector">
-        <label className="melody-label">Melody:</label>
-        <select
-          className="melody-select"
-          value={melodyIndex}
-          onChange={(e) => setMelodyIndex(Number(e.target.value))}
-        >
-          {MELODY_PRESETS.map((preset, i) => (
-            <option key={i} value={i}>{preset.name}</option>
-          ))}
-        </select>
-      </div>
+        <TabBar active={tab} onChange={setTab} />
 
-      <GridEditor
-        grid={grid}
-        onCellChange={handleCellChange}
-        activeBar={activeBar}
-        activeNote={activeNote}
-      />
+        {tab === 'learn' && <LearnPage />}
 
-      {/* Validation badge */}
-      <div className={`validation ${validation.valid ? 'valid' : 'invalid'}`}>
-        {validation.valid ? (
-          <span>Valid magic square</span>
-        ) : (
-          <details>
-            <summary>Invalid — {validation.errors.length} line(s) don't sum to 1 bar</summary>
-            <ul>
-              {validation.errors.map((e, i) => <li key={i}>{e}</li>)}
-            </ul>
-          </details>
+        {tab === 'solve' && (
+          <>
+            <div className="actions">
+              <button className="btn-primary" onClick={() => setShowCamera(true)}>
+                Scan Grid
+              </button>
+            </div>
+
+            <div className="melody-selector">
+              <label className="melody-label">Melody:</label>
+              <select
+                className="melody-select"
+                value={melodyIndex}
+                onChange={(e) => setMelodyIndex(Number(e.target.value))}
+              >
+                {MELODY_PRESETS.map((preset, i) => (
+                  <option key={i} value={i}>{preset.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <GridEditor
+              grid={grid}
+              onCellChange={handleCellChange}
+              activeBar={activeBar}
+              activeNote={activeNote}
+            />
+
+            <div className={`validation ${validation.valid ? 'valid' : 'invalid'}`}>
+              {validation.valid ? (
+                <span>Valid magic square</span>
+              ) : (
+                <details>
+                  <summary>Invalid — {validation.errors.length} line(s) don't sum to 1 bar</summary>
+                  <ul>
+                    {validation.errors.map((e, i) => <li key={i}>{e}</li>)}
+                  </ul>
+                </details>
+              )}
+            </div>
+
+            <div className="staff-bpm-row">
+              <StaffDisplay bars={bars} activeBar={activeBar} activeNote={activeNote} />
+              <PlaybackControls
+                isPlaying={isPlaying}
+                bpm={bpm}
+                onPlay={handlePlay}
+                onStop={handleStop}
+                onBpmChange={setBpm}
+              />
+            </div>
+          </>
         )}
+
+        {tab === 'details' && <DetailsPage />}
+
+        <footer className="app-footer">
+          <button className="btn-share" onClick={() => setShowQR(true)}>
+            Share App
+          </button>
+        </footer>
+
+        <QRShare visible={showQR} onClose={() => setShowQR(false)} />
       </div>
-
-      {/* Staff + BPM layout */}
-      <div className="staff-bpm-row">
-        <StaffDisplay bars={bars} activeBar={activeBar} activeNote={activeNote} />
-        <PlaybackControls
-          isPlaying={isPlaying}
-          bpm={bpm}
-          onPlay={handlePlay}
-          onStop={handleStop}
-          onBpmChange={setBpm}
-        />
-      </div>
-
-      <footer className="app-footer">
-        <button className="btn-share" onClick={() => setShowQR(true)}>
-          Share App
-        </button>
-      </footer>
-
-      <QRShare visible={showQR} onClose={() => setShowQR(false)} />
-    </div>
+    </>
   );
 }
 
