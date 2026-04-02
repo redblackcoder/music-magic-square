@@ -4,6 +4,7 @@ import OnlineSolver from './components/OnlineSolver';
 import TabBar, { type Tab } from './components/TabBar';
 import LearnPage from './components/LearnPage';
 import DetailsPage from './components/DetailsPage';
+import PrintPuzzles from './components/PrintPuzzles';
 import GridEditor from './components/GridEditor';
 import StaffDisplay from './components/StaffDisplay';
 import PlaybackControls from './components/PlaybackControls';
@@ -104,12 +105,13 @@ function App() {
       )}
 
       <div className="app">
-        <header className="app-header">
+        <header className="app-header no-print">
           <h1>Music Magic Square</h1>
           <p className="subtitle">Each row, column &amp; diagonal = 1 bar in 4/4 time</p>
         </header>
 
         <TabBar active={tab} onChange={setTab} />
+
 
         {tab === 'learn' && <LearnPage />}
 
@@ -172,7 +174,9 @@ function App() {
 
         {tab === 'details' && <DetailsPage />}
 
-        <footer className="app-footer">
+        {tab === 'print' && <PrintPuzzles />}
+
+        <footer className="app-footer no-print">
           <button className="btn-share" onClick={() => setShowQR(true)}>
             Share App
           </button>
