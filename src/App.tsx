@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import Camera from './components/Camera';
+import OnlineSolver from './components/OnlineSolver';
 import TabBar, { type Tab } from './components/TabBar';
 import LearnPage from './components/LearnPage';
 import DetailsPage from './components/DetailsPage';
@@ -16,6 +17,7 @@ import './App.css';
 function App() {
   const [tab, setTab] = useState<Tab>('learn');
   const [showCamera, setShowCamera] = useState(false);
+  const [showSolver, setShowSolver] = useState(false);
   const [grid, setGrid] = useState<MusicGrid>(() => createEmptyGrid(MELODY_PRESETS[0].pitches));
   const [isPlaying, setIsPlaying] = useState(false);
   const [bpm, setBpm] = useState(120);
@@ -45,7 +47,7 @@ function App() {
     setGrid((g) => updateCellValue(g, row, col, value));
   }, []);
 
-  const handleCapture = useCallback((values: CellValue[][]) => {
+  const handleGridValues = useCallback((values: CellValue[][]) => {
     setGrid(() =>
       values.map((row, ri) =>
         row.map((value, ci) => ({
@@ -56,7 +58,6 @@ function App() {
         }))
       )
     );
-    setShowCamera(false);
   }, [melody]);
 
   const handlePlay = useCallback(async () => {
@@ -96,7 +97,10 @@ function App() {
   return (
     <>
       {showCamera && (
-        <Camera onCapture={handleCapture} onClose={() => setShowCamera(false)} />
+        <Camera onCapture={(v) => { handleGridValues(v); setShowCamera(false); }} onClose={() => setShowCamera(false)} />
+      )}
+      {showSolver && (
+        <OnlineSolver onCapture={(v) => { handleGridValues(v); setShowSolver(false); }} onClose={() => setShowSolver(false)} />
       )}
 
       <div className="app">
@@ -114,6 +118,9 @@ function App() {
             <div className="actions">
               <button className="btn-primary" onClick={() => setShowCamera(true)}>
                 Scan Grid
+              </button>
+              <button className="btn-secondary" onClick={() => setShowSolver(true)}>
+                Solve Online
               </button>
             </div>
 

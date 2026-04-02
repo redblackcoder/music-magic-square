@@ -1,44 +1,12 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import type { CellValue, NoteDuration } from '../types';
+import type { CellValue } from '../types';
 import type { ScanResult, CellConfidence } from '../imageProcessing';
+import { DUR_TO_NUM, parseInput } from '../parseInput';
 
 interface CameraProps {
   onCapture: (values: CellValue[][]) => void;
   onClose: () => void;
 }
-
-const DUR_TO_NUM: Record<NoteDuration, string> = {
-  '1/16': '1',
-  '1/8': '2',
-  '1/4': '4',
-  '1/2': '8',
-};
-
-const NUM_TO_DUR: Record<string, NoteDuration> = {
-  '1': '1/16',
-  '2': '1/8',
-  '4': '1/4',
-  '8': '1/2',
-};
-
-const VALID_SINGLES = new Set(['1', '2', '4', '8']);
-const VALID_PAIRS: Record<string, [string, string]> = {
-  '1+2': ['1', '2'], '1+4': ['1', '4'], '1+8': ['1', '8'],
-  '2+4': ['2', '4'], '2+8': ['2', '8'], '4+8': ['4', '8'],
-  '2+1': ['1', '2'], '4+1': ['1', '4'], '8+1': ['1', '8'],
-  '4+2': ['2', '4'], '8+2': ['2', '8'], '8+4': ['4', '8'],
-};
-
-// Compound values (sum of sixteenths) → tied pair decomposition
-const COMPOUND_TO_PAIR: Record<string, [string, string]> = {
-  '3': ['1', '2'], '5': ['1', '4'], '6': ['2', '4'],
-  '9': ['1', '8'], '10': ['2', '8'],
-};
-
-// Triple-tied compound value
-const COMPOUND_TRIPLE: Record<string, [string, string, string]> = {
-  '7': ['4', '2', '1'],
-};
 
 /** Low confidence threshold — cells below this get highlighted */
 const LOW_CONFIDENCE = 0.80;
@@ -48,27 +16,6 @@ function cellLabel(v: CellValue): string {
   if (v.kind === 'triple' || v.kind === 'restTriple')
     return `${DUR_TO_NUM[v.first] ?? '?'}+${DUR_TO_NUM[v.second] ?? '?'}+${DUR_TO_NUM[v.third] ?? '?'}`;
   return `${DUR_TO_NUM[v.first] ?? '?'}+${DUR_TO_NUM[v.second] ?? '?'}`;
-}
-
-/** Parse a text string like "4", "1+2", or "3" into a CellValue, or null if invalid */
-function parseInput(text: string): CellValue | null {
-  const clean = text.replace(/\s/g, '');
-  if (VALID_SINGLES.has(clean) && NUM_TO_DUR[clean]) {
-    return { kind: 'single', dur: NUM_TO_DUR[clean] };
-  }
-  const triple = COMPOUND_TRIPLE[clean];
-  if (triple) {
-    return { kind: 'triple', first: NUM_TO_DUR[triple[0]], second: NUM_TO_DUR[triple[1]], third: NUM_TO_DUR[triple[2]] };
-  }
-  const compound = COMPOUND_TO_PAIR[clean];
-  if (compound) {
-    return { kind: 'tied', first: NUM_TO_DUR[compound[0]], second: NUM_TO_DUR[compound[1]] };
-  }
-  const pair = VALID_PAIRS[clean];
-  if (pair) {
-    return { kind: 'tied', first: NUM_TO_DUR[pair[0]], second: NUM_TO_DUR[pair[1]] };
-  }
-  return null;
 }
 
 function isLowConfidence(conf: CellConfidence): boolean {
