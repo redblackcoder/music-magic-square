@@ -243,7 +243,6 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
       ref={fileInputRef}
       type="file"
       accept="image/*"
-      capture="environment"
       style={{ display: 'none' }}
       onChange={handleUpload}
     />
