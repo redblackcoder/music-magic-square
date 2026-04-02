@@ -50,11 +50,12 @@ const VALID_PAIRS: Record<string, [string, string]> = {
  *   Effective visible width ≈ 15.5 cm → grid occupies 84 % — barely fits.
  *   Fix: request zoom = min via applyConstraints (see startCamera below).
  *
- * Guide at 0.50 means the overlay is 50 % of viewport's smaller dimension.
- * This matches CSS `50vmin` and leaves ~6 % margin on each side for
- * alignment tolerance at 30 cm on a non-zoomed 26 mm camera.
+ * Guide at 0.65 means the overlay is 65 % of viewport's smaller dimension.
+ * This matches CSS `65vmin` and maximises the captured area while still
+ * leaving margin for alignment tolerance. The 10 % capture padding further
+ * extends the crop sent to the backend.
  */
-const GUIDE_FRACTION = 0.50;
+const GUIDE_FRACTION = 0.65;
 
 /** Low confidence threshold — cells below this get highlighted */
 const LOW_CONFIDENCE = 0.80;
@@ -206,44 +207,35 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
     setScanStage('Sending to server...');
 
     try {
-      // Calculate the guide overlay region in video pixel coordinates.
-      // The guide is GUIDE_FRACTION of the smaller viewport dimension, centered.
-      // The video uses object-fit: cover, so it may be cropped on one axis.
+      // Map the guide overlay from display coordinates to video pixel
+      // coordinates.  The video element uses object-fit: contain, meaning
+      // the entire video is visible with letterboxing on one axis.
       const vw = video.videoWidth;
       const vh = video.videoHeight;
       const dispW = video.clientWidth;
       const dispH = video.clientHeight;
 
-      // object-fit: cover scaling
-      const videoAspect = vw / vh;
-      const dispAspect = dispW / dispH;
-      let srcX = 0, srcY = 0, srcW = vw, srcH = vh;
-      if (videoAspect > dispAspect) {
-        // Video is wider than display — cropped on sides
-        const visibleW = vh * dispAspect;
-        srcX = (vw - visibleW) / 2;
-        srcW = visibleW;
-      } else {
-        // Video is taller than display — cropped top/bottom
-        const visibleH = vw / dispAspect;
-        srcY = (vh - visibleH) / 2;
-        srcH = visibleH;
-      }
+      // object-fit: contain — scale so the entire video fits inside the
+      // display element, letterboxing the remaining axis.
+      const scale = Math.min(dispW / vw, dispH / vh);
+      const renderedW = vw * scale;   // video width on screen (px)
+      const renderedH = vh * scale;   // video height on screen (px)
+      const offsetX = (dispW - renderedW) / 2; // letterbox offset left
+      const offsetY = (dispH - renderedH) / 2; // letterbox offset top
 
       // Guide overlay is GUIDE_FRACTION of min(dispW, dispH), centered
       const guidePx = GUIDE_FRACTION * Math.min(dispW, dispH);
       const guideLeft = (dispW - guidePx) / 2;
       const guideTop = (dispH - guidePx) / 2;
 
-      // Map guide rect from display coords to visible-video coords, then to full-video coords
-      const scaleX = srcW / dispW;
-      const scaleY = srcH / dispH;
-      const cropX = srcX + guideLeft * scaleX;
-      const cropY = srcY + guideTop * scaleY;
-      const cropW = guidePx * scaleX;
-      const cropH = guidePx * scaleY;
+      // Convert guide rect from display coords to video pixel coords.
+      // Subtract letterbox offset, then divide by the contain scale.
+      const cropX = (guideLeft - offsetX) / scale;
+      const cropY = (guideTop - offsetY) / scale;
+      const cropW = guidePx / scale;
+      const cropH = guidePx / scale;
 
-      // Add some padding (10%) to give grid detection room
+      // Add 10% padding to give grid detection room for edge detection
       const pad = 0.10;
       const padX = cropW * pad;
       const padY = cropH * pad;
@@ -251,6 +243,8 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
       const finalY = Math.max(0, Math.round(cropY - padY));
       const finalW = Math.min(vw - finalX, Math.round(cropW + 2 * padX));
       const finalH = Math.min(vh - finalY, Math.round(cropH + 2 * padY));
+
+      console.log(`[capture] video=${vw}x${vh} display=${dispW}x${dispH} scale=${scale.toFixed(3)} guide=${guidePx.toFixed(0)}px → crop=${finalW}x${finalH}`);
 
       const canvas = document.createElement('canvas');
       canvas.width = finalW;
@@ -453,7 +447,13 @@ export default function Camera({ onCapture, onClose }: CameraProps) {
       {error ? (
         <div className="camera-error">
           <p>{error}</p>
-          <button onClick={onClose}>Go Back</button>
+          <div className="scan-preview-actions">
+            <button className="btn-secondary" onClick={() => { setError(null); handleRetry(); }}>Retry</button>
+            {capturedBase64 && (import.meta.env.VITE_DEBUG_MODE === 'true' || import.meta.env.VITE_APP_ENV === 'dev') && (
+              <button className="btn-secondary" onClick={handleDownloadImage}>Save Image</button>
+            )}
+            <button className="btn-secondary" onClick={onClose}>Close</button>
+          </div>
         </div>
       ) : (
         <>

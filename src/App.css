@@ -405,28 +405,28 @@
   top: 0;
   left: 0;
   right: 0;
-  height: calc(50% - 25vmin);
+  height: calc(50% - 32.5vmin);
 }
 
 .guide-mask-bottom {
   bottom: 0;
   left: 0;
   right: 0;
-  height: calc(50% - 25vmin);
+  height: calc(50% - 32.5vmin);
 }
 
 .guide-mask-left {
-  top: calc(50% - 25vmin);
+  top: calc(50% - 32.5vmin);
   left: 0;
-  width: calc(50% - 25vmin);
-  height: 50vmin;
+  width: calc(50% - 32.5vmin);
+  height: 65vmin;
 }
 
 .guide-mask-right {
-  top: calc(50% - 25vmin);
+  top: calc(50% - 32.5vmin);
   right: 0;
-  width: calc(50% - 25vmin);
-  height: 50vmin;
+  width: calc(50% - 32.5vmin);
+  height: 65vmin;
 }
 
 .guide-grid {
@@ -434,8 +434,8 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 50vmin;
-  height: 50vmin;
+  width: 65vmin;
+  height: 65vmin;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: repeat(4, 1fr);
