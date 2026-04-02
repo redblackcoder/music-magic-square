@@ -21,7 +21,7 @@ function App() {
   const [showSolver, setShowSolver] = useState(false);
   const [grid, setGrid] = useState<MusicGrid>(() => createEmptyGrid(MELODY_PRESETS[0].pitches));
   const [isPlaying, setIsPlaying] = useState(false);
-  const [bpm, setBpm] = useState(120);
+  const [bpm, setBpm] = useState(90);
   const [activeBar, setActiveBar] = useState(-1);
   const [activeNote, setActiveNote] = useState(-1);
   const [showQR, setShowQR] = useState(false);
@@ -126,19 +126,6 @@ function App() {
               </button>
             </div>
 
-            <div className="melody-selector">
-              <label className="melody-label">Melody:</label>
-              <select
-                className="melody-select"
-                value={melodyIndex}
-                onChange={(e) => setMelodyIndex(Number(e.target.value))}
-              >
-                {MELODY_PRESETS.map((preset, i) => (
-                  <option key={i} value={i}>{preset.name}</option>
-                ))}
-              </select>
-            </div>
-
             <GridEditor
               grid={grid}
               onCellChange={handleCellChange}
@@ -157,6 +144,19 @@ function App() {
                   </ul>
                 </details>
               )}
+            </div>
+
+            <div className="melody-selector">
+              <label className="melody-label">Melody:</label>
+              <select
+                className="melody-select"
+                value={melodyIndex}
+                onChange={(e) => setMelodyIndex(Number(e.target.value))}
+              >
+                {MELODY_PRESETS.map((preset, i) => (
+                  <option key={i} value={i}>{preset.name}</option>
+                ))}
+              </select>
             </div>
 
             <div className="staff-bpm-row">

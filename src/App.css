@@ -1365,6 +1365,31 @@
   text-align: right;
 }
 
+.print-constraint {
+  margin-top: 4px;
+  color: #e94560;
+  font-size: 14px;
+}
+
+.print-qr-only {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.print-qr-only-text {
+  font-size: 18px;
+  color: #333;
+  margin: 16px 0 32px;
+  max-width: 400px;
+}
+
+.print-qr-only-code {
+  margin: 0 auto;
+}
+
 /* ── Print media styles ── */
 @media print {
   .no-print,

@@ -26,8 +26,8 @@ export default function PlaybackControls({
         <span className="bpm-value">{bpm}</span>
         <input
           type="range"
-          min={40}
-          max={240}
+          min={30}
+          max={180}
           value={bpm}
           onChange={(e) => onBpmChange(Number(e.target.value))}
           className="bpm-slider-v"

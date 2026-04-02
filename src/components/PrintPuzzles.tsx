@@ -1,21 +1,40 @@
 import { PUZZLES, type PrintPuzzle } from '../generatedPuzzles';
 
-/** QR code for production URL (from QRShare.tsx) */
+/** QR code for production URL with music icon overlay */
 function QRCode({ size }: { size: number }) {
+  const iconSize = size * 0.22;
+  const iconOffset = (size - iconSize) / 2;
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 37 37"
-      width={size}
-      height={size}
-      shapeRendering="crispEdges"
-    >
-      <path fill="#ffffff" d="M0 0h37v37H0z" />
-      <path
-        stroke="#1a1a2e"
-        d="M4 4.5h7m2 0h2m3 0h1m1 0h1m2 0h2m1 0h7M4 5.5h1m5 0h1m2 0h3m3 0h1m4 0h1m1 0h1m5 0h1M4 6.5h1m1 0h3m1 0h1m1 0h1m1 0h1m4 0h1m6 0h1m1 0h3m1 0h1M4 7.5h1m1 0h3m1 0h1m1 0h3m4 0h3m2 0h1m1 0h1m1 0h3m1 0h1M4 8.5h1m1 0h3m1 0h1m1 0h2m2 0h2m2 0h1m1 0h3m1 0h1m1 0h3m1 0h1M4 9.5h1m5 0h1m1 0h3m1 0h5m1 0h1m1 0h1m1 0h1m5 0h1M4 10.5h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7M12 11.5h1m1 0h2m1 0h1m1 0h1m3 0h1M4 12.5h1m1 0h5m2 0h3m2 0h2m1 0h1m2 0h1m1 0h5M4 13.5h3m2 0h1m1 0h1m4 0h1m3 0h1m2 0h6m3 0h1M4 14.5h2m1 0h2m1 0h1m5 0h1m2 0h1m1 0h2m1 0h2m1 0h2M7 15.5h2m5 0h2m2 0h1m1 0h1m1 0h1m1 0h1m2 0h1m1 0h1M4 16.5h3m1 0h4m3 0h1m5 0h1m1 0h1m1 0h1m3 0h2M4 17.5h1m1 0h2m3 0h2m2 0h4m3 0h2m1 0h4m3 0h1M4 18.5h2m3 0h3m1 0h7m4 0h1m1 0h2m1 0h2M4 19.5h1m1 0h1m1 0h2m1 0h1m2 0h1m1 0h2m1 0h2m2 0h1m4 0h1m2 0h1M4 20.5h2m2 0h1m1 0h2m1 0h4m1 0h1m2 0h2m4 0h1m1 0h2M4 21.5h1m1 0h3m2 0h1m1 0h1m2 0h1m3 0h9m1 0h1m1 0h1M4 22.5h1m4 0h2m1 0h5m2 0h3m2 0h1m1 0h3m1 0h1M4 23.5h1m1 0h1m1 0h2m2 0h2m4 0h3m1 0h1m4 0h2m2 0h1M4 24.5h1m1 0h2m1 0h2m1 0h1m2 0h1m3 0h1m1 0h1m1 0h6m1 0h3M12 25.5h1m3 0h3m1 0h1m3 0h1m3 0h5M4 26.5h7m3 0h1m1 0h6m1 0h2m1 0h1m1 0h3M4 27.5h1m5 0h1m1 0h2m1 0h1m1 0h1m4 0h3m3 0h1M4 28.5h1m1 0h3m1 0h1m1 0h1m2 0h1m2 0h2m1 0h1m2 0h5m1 0h1M4 29.5h1m1 0h3m1 0h1m1 0h4m1 0h1m2 0h1m1 0h3m2 0h1m1 0h4M4 30.5h1m1 0h3m1 0h1m1 0h2m5 0h1m3 0h1m1 0h7M4 31.5h1m5 0h1m3 0h3m1 0h1m5 0h2m1 0h3m1 0h1M4 32.5h7m1 0h2m3 0h1m1 0h3m1 0h1m3 0h1m2 0h1"
-      />
-    </svg>
+    <div style={{ position: 'relative', width: size, height: size, display: 'inline-block' }}>
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 37 37"
+        width={size}
+        height={size}
+        shapeRendering="crispEdges"
+      >
+        <path fill="#ffffff" d="M0 0h37v37H0z" />
+        <path
+          stroke="#1a1a2e"
+          d="M4 4.5h7m2 0h2m3 0h1m1 0h1m2 0h2m1 0h7M4 5.5h1m5 0h1m2 0h3m3 0h1m4 0h1m1 0h1m5 0h1M4 6.5h1m1 0h3m1 0h1m1 0h1m1 0h1m4 0h1m6 0h1m1 0h3m1 0h1M4 7.5h1m1 0h3m1 0h1m1 0h3m4 0h3m2 0h1m1 0h1m1 0h3m1 0h1M4 8.5h1m1 0h3m1 0h1m1 0h2m2 0h2m2 0h1m1 0h3m1 0h1m1 0h3m1 0h1M4 9.5h1m5 0h1m1 0h3m1 0h5m1 0h1m1 0h1m1 0h1m5 0h1M4 10.5h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7M12 11.5h1m1 0h2m1 0h1m1 0h1m3 0h1M4 12.5h1m1 0h5m2 0h3m2 0h2m1 0h1m2 0h1m1 0h5M4 13.5h3m2 0h1m1 0h1m4 0h1m3 0h1m2 0h6m3 0h1M4 14.5h2m1 0h2m1 0h1m5 0h1m2 0h1m1 0h2m1 0h2m1 0h2M7 15.5h2m5 0h2m2 0h1m1 0h1m1 0h1m1 0h1m2 0h1m1 0h1M4 16.5h3m1 0h4m3 0h1m5 0h1m1 0h1m1 0h1m3 0h2M4 17.5h1m1 0h2m3 0h2m2 0h4m3 0h2m1 0h4m3 0h1M4 18.5h2m3 0h3m1 0h7m4 0h1m1 0h2m1 0h2M4 19.5h1m1 0h1m1 0h2m1 0h1m2 0h1m1 0h2m1 0h2m2 0h1m4 0h1m2 0h1M4 20.5h2m2 0h1m1 0h2m1 0h4m1 0h1m2 0h2m4 0h1m1 0h2M4 21.5h1m1 0h3m2 0h1m1 0h1m2 0h1m3 0h9m1 0h1m1 0h1M4 22.5h1m4 0h2m1 0h5m2 0h3m2 0h1m1 0h3m1 0h1M4 23.5h1m1 0h1m1 0h2m2 0h2m4 0h3m1 0h1m4 0h2m2 0h1M4 24.5h1m1 0h2m1 0h2m1 0h1m2 0h1m3 0h1m1 0h1m1 0h6m1 0h3M12 25.5h1m3 0h3m1 0h1m3 0h1m3 0h5M4 26.5h7m3 0h1m1 0h6m1 0h2m1 0h1m1 0h3M4 27.5h1m5 0h1m1 0h2m1 0h1m1 0h1m4 0h3m3 0h1M4 28.5h1m1 0h3m1 0h1m1 0h1m2 0h1m2 0h2m1 0h1m2 0h5m1 0h1M4 29.5h1m1 0h3m1 0h1m1 0h4m1 0h1m2 0h1m1 0h3m2 0h1m1 0h4M4 30.5h1m1 0h3m1 0h1m1 0h2m5 0h1m3 0h1m1 0h7M4 31.5h1m5 0h1m3 0h3m1 0h1m5 0h2m1 0h3m1 0h1M4 32.5h7m1 0h2m3 0h1m1 0h3m1 0h1m3 0h1m2 0h1"
+        />
+      </svg>
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 64 64"
+        width={iconSize}
+        height={iconSize}
+        style={{ position: 'absolute', top: iconOffset, left: iconOffset }}
+      >
+        <circle cx="32" cy="32" r="32" fill="#1a1a2e" />
+        <ellipse cx="18" cy="46" rx="7" ry="5" fill="#e94560" transform="rotate(-15 18 46)" />
+        <ellipse cx="46" cy="42" rx="7" ry="5" fill="#e94560" transform="rotate(-15 46 42)" />
+        <rect x="23.5" y="14" width="2.5" height="33" fill="#e94560" />
+        <rect x="51.5" y="10" width="2.5" height="33" fill="#e94560" />
+        <polygon points="23.5,14 54,10 54,16 23.5,20" fill="#e94560" />
+        <polygon points="23.5,22 54,18 54,24 23.5,28" fill="#e94560" />
+      </svg>
+    </div>
   );
 }
 
@@ -27,7 +46,9 @@ function PuzzlePage({ puzzle, index }: { puzzle: PrintPuzzle; index: number }) {
       <div className="print-content">
         <div className="print-header">
           <h1>Music Magic Square</h1>
-          <p className="print-subtitle">Puzzle #{index + 1}</p>
+          <p className="print-subtitle">
+            Puzzle #{index + 1}{puzzle.hard ? ' — Hard' : ''}
+          </p>
         </div>
 
         <div className="print-instructions">
@@ -44,9 +65,14 @@ function PuzzlePage({ puzzle, index }: { puzzle: PrintPuzzle; index: number }) {
                 Scan the QR code to learn more about magic squares and musical
                 note durations, and to play your solution as music!
               </p>
+              {puzzle.hard && puzzle.uniqueValues && (
+                <p className="print-constraint">
+                  <strong>Challenge:</strong> Use all of these {puzzle.uniqueValues.length} values: <strong>{puzzle.uniqueValues.join(', ')}</strong>
+                </p>
+              )}
             </div>
             <div className="print-qr">
-              <QRCode size={100} />
+              <QRCode size={150} />
             </div>
           </div>
         </div>
@@ -79,6 +105,29 @@ function PuzzlePage({ puzzle, index }: { puzzle: PrintPuzzle; index: number }) {
   );
 }
 
+function QROnlyPage() {
+  return (
+    <div className="print-page">
+      <div className="print-content print-qr-only">
+        <div className="print-header">
+          <h1>Music Magic Square</h1>
+        </div>
+        <p className="print-qr-only-text">
+          Scan the code to solve the puzzle online and hear your solution as music!
+        </p>
+        <div className="print-qr-only-code">
+          <QRCode size={400} />
+        </div>
+        <div className="print-footer">
+          <div className="print-credits">
+            By Erisha | Grade 2 | Room 5
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PrintPuzzles() {
   return (
     <div className="print-puzzles">
@@ -91,6 +140,7 @@ export default function PrintPuzzles() {
       {PUZZLES.map((puzzle, i) => (
         <PuzzlePage key={i} puzzle={puzzle} index={i} />
       ))}
+      <QROnlyPage />
     </div>
   );
 }

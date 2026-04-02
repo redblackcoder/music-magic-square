@@ -237,6 +237,7 @@ export default function GridEditor({ grid, onCellChange, activeBar, activeNote }
               onPointerDown={readonly ? undefined : () => handlePointerDown(ri, ci)}
               onPointerUp={readonly ? undefined : () => handlePointerUp(ri, ci)}
               onPointerLeave={readonly ? undefined : handlePointerLeave}
+              onFocus={(e) => e.target.blur()}
               title={`${PITCH_NAMES[cell.pitch]} - ${formatBeats(cell.value)}`}
               style={readonly ? { cursor: 'default' } : undefined}
             >
