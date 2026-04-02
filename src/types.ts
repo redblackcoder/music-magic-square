@@ -110,38 +110,6 @@ export const DEFAULT_PITCHES: number[][] = [
   [91, 86, 79, 96], // G6  D6  G5  C7
 ];
 
-/**
- * Default cell values: a magic square where every row, col, and diagonal sums to 1.
- * Uses values: 1/2, 1/4, 1/16, 3/16 (= 1/8+1/16 tied).
- * 8/16 + 4/16 + 1/16 + 3/16 = 16/16 = 1 for each line.
- */
-export const DEFAULT_VALUES: CellValue[][] = [
-  [
-    { kind: 'single', dur: '1/2' },
-    { kind: 'single', dur: '1/4' },
-    { kind: 'single', dur: '1/16' },
-    { kind: 'tied', first: '1/8', second: '1/16' },
-  ],
-  [
-    { kind: 'single', dur: '1/16' },
-    { kind: 'tied', first: '1/8', second: '1/16' },
-    { kind: 'single', dur: '1/2' },
-    { kind: 'single', dur: '1/4' },
-  ],
-  [
-    { kind: 'tied', first: '1/8', second: '1/16' },
-    { kind: 'single', dur: '1/16' },
-    { kind: 'single', dur: '1/4' },
-    { kind: 'single', dur: '1/2' },
-  ],
-  [
-    { kind: 'single', dur: '1/4' },
-    { kind: 'single', dur: '1/2' },
-    { kind: 'tied', first: '1/8', second: '1/16' },
-    { kind: 'single', dur: '1/16' },
-  ],
-];
-
 /** Map every MIDI pitch we use to its display name */
 export const PITCH_NAMES: Record<number, string> = {
   58: 'Bb3', 59: 'B3',

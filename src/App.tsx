@@ -4,17 +4,17 @@ import GridEditor from './components/GridEditor';
 import StaffDisplay from './components/StaffDisplay';
 import PlaybackControls from './components/PlaybackControls';
 import QRShare from './components/QRShare';
-import { createDefaultGrid, extractBars, updateCellValue, validateMagicSquare } from './gridLogic';
+import { createEmptyGrid, extractBars, updateCellValue, validateMagicSquare } from './gridLogic';
 import { playBars, stopPlayback } from './audioEngine';
 import type { MusicGrid, CellValue } from './types';
-import { DEFAULT_VALUES, MELODY_PRESETS } from './types';
+import { MELODY_PRESETS } from './types';
 import './App.css';
 
 type View = 'main' | 'camera';
 
 function App() {
   const [view, setView] = useState<View>('main');
-  const [grid, setGrid] = useState<MusicGrid>(createDefaultGrid);
+  const [grid, setGrid] = useState<MusicGrid>(() => createEmptyGrid(MELODY_PRESETS[0].pitches));
   const [isPlaying, setIsPlaying] = useState(false);
   const [bpm, setBpm] = useState(120);
   const [activeBar, setActiveBar] = useState(-1);
@@ -91,21 +91,6 @@ function App() {
     setActiveNote(-1);
   }, []);
 
-  const handleRandomize = useCallback(() => {
-    const rowPerm = [0, 1, 2, 3].sort(() => Math.random() - 0.5);
-    const colPerm = [0, 1, 2, 3].sort(() => Math.random() - 0.5);
-    setGrid(
-      Array.from({ length: 4 }, (_, ri) =>
-        Array.from({ length: 4 }, (_, ci) => ({
-          row: ri,
-          col: ci,
-          value: DEFAULT_VALUES[rowPerm[ri]][colPerm[ci]],
-          pitch: melody.pitches[ri][ci],
-        }))
-      )
-    );
-  }, [melody]);
-
   if (view === 'camera') {
     return <Camera onCapture={handleCapture} onClose={() => setView('main')} />;
   }
@@ -120,9 +105,6 @@ function App() {
       <div className="actions">
         <button className="btn-primary" onClick={() => setView('camera')}>
           Scan Grid
-        </button>
-        <button className="btn-secondary" onClick={handleRandomize}>
-          Randomize
         </button>
       </div>
 

@@ -1,29 +1,21 @@
 import {
   type MusicGrid,
-  type GridCell,
   type Bar,
   type CellValue,
-  DEFAULT_PITCHES,
-  DEFAULT_VALUES,
   getCellBeats,
 } from './types';
 
-/** Create the default 4x4 grid — a valid magic square */
-export function createDefaultGrid(): MusicGrid {
-  const grid: MusicGrid = [];
-  for (let r = 0; r < 4; r++) {
-    const row: GridCell[] = [];
-    for (let c = 0; c < 4; c++) {
-      row.push({
-        row: r,
-        col: c,
-        value: DEFAULT_VALUES[r][c],
-        pitch: DEFAULT_PITCHES[r][c],
-      });
-    }
-    grid.push(row);
-  }
-  return grid;
+/** Create an empty 4x4 grid with quarter note defaults */
+export function createEmptyGrid(pitches: number[][]): MusicGrid {
+  const defaultValue: CellValue = { kind: 'single', dur: '1/4' };
+  return Array.from({ length: 4 }, (_, r) =>
+    Array.from({ length: 4 }, (_, c) => ({
+      row: r,
+      col: c,
+      value: defaultValue,
+      pitch: pitches[r][c],
+    }))
+  );
 }
 
 /** Extract the 10 bars from the 4x4 grid */
@@ -69,6 +61,10 @@ export function validateMagicSquare(grid: MusicGrid): { valid: boolean; errors: 
     if (Math.abs(sum - 1.0) > EPS) {
       const sixteenths = Math.round(sum * 16);
       errors.push(`${bar.label}: ${sixteenths}/16 (need 16/16)`);
+    }
+    const beats = bar.cells.map((cell) => getCellBeats(cell.value));
+    if (new Set(beats).size !== beats.length) {
+      errors.push(`${bar.label}: has duplicate durations`);
     }
   }
 

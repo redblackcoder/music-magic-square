@@ -12,7 +12,7 @@ import {
 
 interface GridEditorProps {
   grid: MusicGrid;
-  onCellChange: (row: number, col: number, value: CellValue) => void;
+  onCellChange?: (row: number, col: number, value: CellValue) => void;
   activeBar: number;
   activeNote: number;
 }
@@ -160,7 +160,6 @@ function toggleRest(value: CellValue): CellValue {
   if (value.kind === 'restPair') return { kind: 'tied', first: value.first, second: value.second };
   if (value.kind === 'tied') return { kind: 'restPair', first: value.first, second: value.second };
   if (value.kind === 'restTriple') return { kind: 'triple', first: value.first, second: value.second, third: value.third };
-  // triple → restTriple
   return { kind: 'restTriple', first: value.first, second: value.second, third: value.third };
 }
 
@@ -168,13 +167,14 @@ const LONG_PRESS_MS = 500;
 
 export default function GridEditor({ grid, onCellChange, activeBar, activeNote }: GridEditorProps) {
   const activeCells = getBarCells(activeBar);
+  const readonly = !onCellChange;
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
 
   const cycleValue = useCallback((row: number, col: number) => {
+    if (!onCellChange) return;
     const current = grid[row][col].value;
     if (isRest(current)) {
-      // Cycle through rest equivalents of CELL_OPTIONS
       const restOptions = CELL_OPTIONS.map(toggleRest);
       const idx = restOptions.findIndex((o) => cellValuesEqual(o, current));
       const next = restOptions[(idx + 1) % restOptions.length];
@@ -187,6 +187,7 @@ export default function GridEditor({ grid, onCellChange, activeBar, activeNote }
   }, [grid, onCellChange]);
 
   const handlePointerDown = useCallback((row: number, col: number) => {
+    if (!onCellChange) return;
     didLongPress.current = false;
     longPressTimer.current = setTimeout(() => {
       didLongPress.current = true;
@@ -196,6 +197,7 @@ export default function GridEditor({ grid, onCellChange, activeBar, activeNote }
   }, [grid, onCellChange]);
 
   const handlePointerUp = useCallback((row: number, col: number) => {
+    if (!onCellChange) return;
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
@@ -203,7 +205,7 @@ export default function GridEditor({ grid, onCellChange, activeBar, activeNote }
     if (!didLongPress.current) {
       cycleValue(row, col);
     }
-  }, [cycleValue]);
+  }, [onCellChange, cycleValue]);
 
   const handlePointerLeave = useCallback(() => {
     if (longPressTimer.current) {
@@ -232,10 +234,11 @@ export default function GridEditor({ grid, onCellChange, activeBar, activeNote }
             <button
               key={`${ri}-${ci}`}
               className={`grid-cell ${isActive(ri, ci) ? 'active' : ''} ${isPlaying(ri, ci) ? 'playing' : ''} ${isRest(cell.value) ? 'rest' : ''}`}
-              onPointerDown={() => handlePointerDown(ri, ci)}
-              onPointerUp={() => handlePointerUp(ri, ci)}
-              onPointerLeave={handlePointerLeave}
-              title={`${PITCH_NAMES[cell.pitch]} - ${formatBeats(cell.value)} (tap to change, hold for rest)`}
+              onPointerDown={readonly ? undefined : () => handlePointerDown(ri, ci)}
+              onPointerUp={readonly ? undefined : () => handlePointerUp(ri, ci)}
+              onPointerLeave={readonly ? undefined : handlePointerLeave}
+              title={`${PITCH_NAMES[cell.pitch]} - ${formatBeats(cell.value)}`}
+              style={readonly ? { cursor: 'default' } : undefined}
             >
               <CellSymbol value={cell.value} />
               <span className="cell-beats">{formatBeats(cell.value)}</span>
@@ -244,7 +247,7 @@ export default function GridEditor({ grid, onCellChange, activeBar, activeNote }
           ))
         )}
       </div>
-      <p className="grid-hint">Tap to cycle duration. Long-press to toggle rest.</p>
+      {!readonly && <p className="grid-hint">Tap to cycle duration. Long-press to toggle rest.</p>}
     </div>
   );
 }
