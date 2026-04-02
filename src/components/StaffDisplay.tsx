@@ -84,6 +84,38 @@ function NoteOnStaff({ value, pitch, x, playing }: {
     );
   }
 
+  if (value.kind === 'restPair') {
+    const restY = posToY(4);
+    const restDy = 0.35 * fontSize;
+    const sym1 = REST_SYMBOL[value.first];
+    const sym2 = REST_SYMBOL[value.second];
+    const pairGap = 14;
+    return (
+      <g>
+        <text
+          x={x - pairGap / 2} y={restY + restDy}
+          fill={color}
+          fontFamily="Bravura, serif"
+          fontSize={sym1.size * 0.8}
+          textAnchor="middle"
+          opacity={0.7}
+        >
+          {sym1.char}
+        </text>
+        <text
+          x={x + pairGap / 2} y={restY + restDy}
+          fill={color}
+          fontFamily="Bravura, serif"
+          fontSize={sym2.size * 0.8}
+          textAnchor="middle"
+          opacity={0.7}
+        >
+          {sym2.char}
+        </text>
+      </g>
+    );
+  }
+
   if (value.kind === 'single') {
     return (
       <g>

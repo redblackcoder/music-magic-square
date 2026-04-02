@@ -2,13 +2,13 @@ import { useRef, useCallback } from 'react';
 import {
   type MusicGrid,
   type CellValue,
-  type NoteDuration,
   CELL_OPTIONS,
   DUR_SYMBOL,
   REST_SYMBOL,
   NOTE_DURATIONS,
   PITCH_NAMES,
   formatBeats,
+  isRest,
 } from '../types';
 
 interface GridEditorProps {
@@ -34,6 +34,7 @@ function cellValuesEqual(a: CellValue, b: CellValue): boolean {
   if (a.kind === 'single' && b.kind === 'single') return a.dur === b.dur;
   if (a.kind === 'tied' && b.kind === 'tied') return a.first === b.first && a.second === b.second;
   if (a.kind === 'rest' && b.kind === 'rest') return a.dur === b.dur;
+  if (a.kind === 'restPair' && b.kind === 'restPair') return a.first === b.first && a.second === b.second;
   return false;
 }
 
@@ -44,6 +45,22 @@ function CellSymbol({ value }: { value: CellValue }) {
     return (
       <span className="cell-note bravura" style={{ fontSize: sym.size }}>
         {sym.char}
+      </span>
+    );
+  }
+
+  if (value.kind === 'restPair') {
+    const sym1 = REST_SYMBOL[value.first];
+    const sym2 = REST_SYMBOL[value.second];
+    const restSize = 20;
+    return (
+      <span className="cell-tied-notes">
+        <span className="cell-note bravura" style={{ fontSize: restSize }}>
+          {sym1.char}
+        </span>
+        <span className="cell-note bravura" style={{ fontSize: restSize }}>
+          {sym2.char}
+        </span>
       </span>
     );
   }
@@ -92,8 +109,9 @@ function CellSymbol({ value }: { value: CellValue }) {
 function toggleRest(value: CellValue): CellValue {
   if (value.kind === 'rest') return { kind: 'single', dur: value.dur };
   if (value.kind === 'single') return { kind: 'rest', dur: value.dur };
-  // tied → rest using first note's duration
-  return { kind: 'rest', dur: value.first };
+  if (value.kind === 'restPair') return { kind: 'tied', first: value.first, second: value.second };
+  // tied → two rests preserving both durations
+  return { kind: 'restPair', first: value.first, second: value.second };
 }
 
 const LONG_PRESS_MS = 500;
@@ -106,8 +124,9 @@ export default function GridEditor({ grid, onCellChange, activeBar, activeNote }
   const cycleValue = useCallback((row: number, col: number) => {
     const current = grid[row][col].value;
     // If it's a rest, cycle through the 4 single durations only
-    if (current.kind === 'rest') {
-      const idx = NOTE_DURATIONS.indexOf(current.dur as NoteDuration);
+    if (current.kind === 'rest' || current.kind === 'restPair') {
+      const curDur = current.kind === 'rest' ? current.dur : current.first;
+      const idx = NOTE_DURATIONS.indexOf(curDur);
       const nextDur = NOTE_DURATIONS[(idx + 1) % NOTE_DURATIONS.length];
       onCellChange(row, col, { kind: 'rest', dur: nextDur });
       return;
@@ -162,7 +181,7 @@ export default function GridEditor({ grid, onCellChange, activeBar, activeNote }
           row.map((cell, ci) => (
             <button
               key={`${ri}-${ci}`}
-              className={`grid-cell ${isActive(ri, ci) ? 'active' : ''} ${isPlaying(ri, ci) ? 'playing' : ''} ${cell.value.kind === 'rest' ? 'rest' : ''}`}
+              className={`grid-cell ${isActive(ri, ci) ? 'active' : ''} ${isPlaying(ri, ci) ? 'playing' : ''} ${isRest(cell.value) ? 'rest' : ''}`}
               onPointerDown={() => handlePointerDown(ri, ci)}
               onPointerUp={() => handlePointerUp(ri, ci)}
               onPointerLeave={handlePointerLeave}

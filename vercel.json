@@ -2,7 +2,7 @@
   "functions": {
     "api/scan.py": {
       "maxDuration": 10,
-      "includeFiles": "models/**"
+      "includeFiles": "{models/**,api/*.py}"
     }
   }
 }
